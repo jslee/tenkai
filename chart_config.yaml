@@ -1,0 +1,39 @@
+image:
+  width: 1920
+  height: 1080
+  dpi: 100
+
+defaults:
+  output_dir: charts
+  intervals: [1, 3, 5]
+  plot_count: 120
+
+fonts:
+  candidates:
+    - Malgun Gothic
+    - AppleGothic
+    - NanumGothic
+    - Noto Sans CJK KR
+    - Noto Sans KR
+    - DejaVu Sans
+
+colors:
+  background: "#ffffff"
+  grid: "#d9d9d9"
+  text: "#222222"
+  price_up: "#d60000"
+  price_down: "#0057d8"
+  bb_upper: "#7a3db8"
+  bb_mid: "#666666"
+  bb_lower: "#7a3db8"
+  rsi: "#ff8c00"
+  rsi_overbought: "#d60000"
+  rsi_oversold: "#0057d8"
+  volume_up: "#d60000"
+  volume_down: "#0057d8"
+  macd: "#111111"
+  macd_signal: "#ff8c00"
+  macd_hist_positive: "#d60000"
+  macd_hist_positive_weak: "#f2a4a4"
+  macd_hist_negative: "#0057d8"
+  macd_hist_negative_weak: "#9ec0ff"

@@ -1,0 +1,44 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [        
+        {
+            "name": "Main",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            // "args": ["--ticker", "069500", "--interval", "3"]
+            "args": ["--ticker", "069500"]
+        },
+        {
+            "name": "Report",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/report.py",
+            "args": ["--paper"
+            ]
+        },
+        {
+            "name": "Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "tests/test_filters.py",
+                "-v"
+            ]
+        },
+        {
+            "name": "Test Gate3 BUY Candle",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "tests/test_filters.py::TestGate3ClaudeFilter::test_pass_high_confidence_buy_with_candle_pattern",
+                "-v"
+            ]
+        }
+    ]
+}
