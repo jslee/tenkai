@@ -202,83 +202,171 @@ class KISMarket:
             logger.warning("[체결강도 조회] 오류 (기본값 0.0 반환): %s", e)
             return 0.0
 
-    # ── 일봉 조회 (기간별시세) ─────────────────────────────────────────────
+    # ── 일/주/월봉 조회 (기간별시세) ──────────────────────────────────────
 
-    async def get_daily_candles(
-        self, ticker: str, days: int = 20
+    async def _fetch_period_candles(
+        self, ticker: str, period_code: str, count: int
     ) -> list[dict[str, Any]]:
-        """
-        최근 N 거래일의 일봉 OHLCV를 조회한다. (FHKST03010100)
+        """일/주/월봉 공통 페이지네이션 조회 헬퍼. (FHKST03010100)
+
+        KIS API는 최신→과거 순으로 output2를 반환하며 한 페이지당 최대 약 100건을
+        내려준다. 필요한 봉 수(count)를 채울 때까지 FID_INPUT_DATE_2를 이전 페이지의
+        가장 오래된 날짜 하루 전으로 당기며 반복 호출한다.
 
         Args:
-            ticker: 종목코드
-            days: 조회 일수 (기본 20)
-
-        Returns:
-            [
-                {"date": "YYYYMMDD", "open": int, "high": int, "low": int,
-                 "close": int, "volume": int},
-                ...
-            ]  # 최신 날짜가 index 0
+            ticker:      종목코드
+            period_code: "D" (일봉) | "W" (주봉) | "M" (월봉)
+            count:       최대 반환 봉 수
         """
         from datetime import datetime, timedelta
 
-        end_date = datetime.now().strftime("%Y%m%d")
-        start_date = (datetime.now() - timedelta(days=days * 2)).strftime("%Y%m%d")
-
         url = f"{self._auth_data.base_url}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
-        params = {
-            "FID_COND_MRKT_DIV_CODE": "J",
-            "FID_INPUT_ISCD": ticker,
-            "FID_INPUT_DATE_1": start_date,
-            "FID_INPUT_DATE_2": end_date,
-            "FID_PERIOD_DIV_CODE": "D",
-            "FID_ORG_ADJ_PRC": "0",
-        }
+        # start_date는 충분히 과거로 고정 (KIS는 이 값을 하한으로만 사용)
+        start_date = (datetime.now() - timedelta(days=count * 4)).strftime("%Y%m%d")
+        end_date = datetime.now().strftime("%Y%m%d")
+
+        candles: list[dict[str, Any]] = []
+        seen_dates: set[str] = set()
+
         try:
             await self._auth_data.get_token()
             headers = self._auth_data.get_headers("FHKST03010100")
             async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    url,
-                    headers=headers,
-                    params=params,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as resp:
-                    resp.raise_for_status()
-                    data = await resp.json()
-
-            raw = data.get("output2")
-            if not isinstance(raw, list):
-                raw = []
-            candles = []
-            for c in raw[:days]:
-                vol = int(c.get("acml_vol", 0))
-                if vol <= 0:
-                    continue
-                candles.append(
-                    {
-                        "date": c.get("stck_bsop_date", ""),
-                        "open": int(c.get("stck_oprc", 0)),
-                        "high": int(c.get("stck_hgpr", 0)),
-                        "low": int(c.get("stck_lwpr", 0)),
-                        "close": int(c.get("stck_clpr", 0)),
-                        "volume": vol,
+                while len(candles) < count:
+                    params = {
+                        "FID_COND_MRKT_DIV_CODE": "J",
+                        "FID_INPUT_ISCD": ticker,
+                        "FID_INPUT_DATE_1": start_date,
+                        "FID_INPUT_DATE_2": end_date,
+                        "FID_PERIOD_DIV_CODE": period_code,
+                        "FID_ORG_ADJ_PRC": "0",
                     }
-                )
-            return candles
+                    async with session.get(
+                        url,
+                        headers=headers,
+                        params=params,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        resp.raise_for_status()
+                        data = await resp.json()
+
+                    raw = data.get("output2")
+                    if not isinstance(raw, list) or not raw:
+                        break  # 더 이상 데이터 없음
+
+                    oldest_date: str = ""
+                    page_added = 0
+                    for c in raw:
+                        date_str = c.get("stck_bsop_date", "")
+                        if not date_str or date_str in seen_dates:
+                            continue
+                        vol = int(c.get("acml_vol", 0))
+                        if vol <= 0:
+                            oldest_date = date_str
+                            continue
+                        seen_dates.add(date_str)
+                        oldest_date = date_str
+                        candles.append(
+                            {
+                                "date": date_str,
+                                "open": int(c.get("stck_oprc", 0)),
+                                "high": int(c.get("stck_hgpr", 0)),
+                                "low": int(c.get("stck_lwpr", 0)),
+                                "close": int(c.get("stck_clpr", 0)),
+                                "volume": vol,
+                            }
+                        )
+                        page_added += 1
+                        if len(candles) >= count:
+                            break
+
+                    if not oldest_date or page_added == 0:
+                        break  # 무한 루프 방지
+
+                    # 다음 페이지: 이번 페이지 가장 오래된 날짜 하루 전까지 조회
+                    next_end = datetime.strptime(oldest_date, "%Y%m%d") - timedelta(
+                        days=1
+                    )
+                    if next_end.strftime("%Y%m%d") < start_date:
+                        break
+                    end_date = next_end.strftime("%Y%m%d")
+
+                    # KIS OpenAPI 호출 제한 배려
+                    await asyncio.sleep(0.3)
 
         except aiohttp.ClientError as e:
-            logger.error("[일봉 조회] API 오류 (ticker=%s): %s", ticker, e)
+            logger.error(
+                "[기간봉 조회] API 오류 (ticker=%s, period=%s): %s",
+                ticker,
+                period_code,
+                e,
+            )
             raise
         except (KeyError, ValueError, TypeError) as e:
             logger.error(
-                "[일봉 조회] 응답 파싱 오류 (ticker=%s): %s: %s",
+                "[기간봉 조회] 응답 파싱 오류 (ticker=%s, period=%s): %s: %s",
                 ticker,
+                period_code,
                 type(e).__name__,
                 e,
             )
             raise
+
+        logger.debug(
+            "[기간봉 조회] %s %s: %d봉 수집 (요청 %d)",
+            ticker,
+            period_code,
+            len(candles),
+            count,
+        )
+        return candles
+
+    async def get_daily_candles(
+        self, ticker: str, days: int = 200
+    ) -> list[dict[str, Any]]:
+        """
+        최근 N 거래일의 일봉 OHLCV를 조회한다.
+
+        기본값 200봉: RSI/MACD/BB 계산 후 EMA(60) 안정화까지 충분한 여유(약 10개월치).
+
+        Returns:
+            [{"date": "YYYYMMDD", "open": int, "high": int, "low": int,
+              "close": int, "volume": int}, ...]  # 최신 날짜가 index 0
+        """
+        # 페이지네이션으로 필요한 만큼 가져오므로 lookback 계산 불필요.
+        return await self._fetch_period_candles(ticker, "D", days)
+
+    async def get_weekly_candles(
+        self, ticker: str, weeks: int = 100
+    ) -> list[dict[str, Any]]:
+        """
+        최근 N 주의 주봉 OHLCV를 조회한다.
+
+        기본값 100봉: 약 2년치. EMA(60) 안정화 포함 지표 계산에 충분.
+        date 필드는 해당 주의 마지막 거래일(금요일) 기준이다.
+
+        Returns:
+            [{"date": "YYYYMMDD", "open": int, "high": int, "low": int,
+              "close": int, "volume": int}, ...]  # 최신 주가 index 0
+        """
+        # 페이지네이션으로 필요한 만큼 가져오므로 lookback 계산 불필요.
+        return await self._fetch_period_candles(ticker, "W", weeks)
+
+    async def get_monthly_candles(
+        self, ticker: str, months: int = 60
+    ) -> list[dict[str, Any]]:
+        """
+        최근 N 개월의 월봉 OHLCV를 조회한다.
+
+        기본값 60봉: 약 5년치. EMA(60) 안정화 포함 장기 지표 계산에 충분.
+        date 필드는 해당 월의 마지막 거래일 기준이다.
+
+        Returns:
+            [{"date": "YYYYMMDD", "open": int, "high": int, "low": int,
+              "close": int, "volume": int}, ...]  # 최신 월이 index 0
+        """
+        # 페이지네이션으로 필요한 만큼 가져오므로 lookback 계산 불필요.
+        return await self._fetch_period_candles(ticker, "M", months)
 
     # ── 1분봉 조회 ─────────────────────────────────────────────────────────
 
