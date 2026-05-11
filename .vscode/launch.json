@@ -13,6 +13,13 @@
             "args": ["--ticker", "069500"]
         },
         {
+            "name": "Chart",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/make_charts.py",
+            "args": ["--ticker", "005930", "--interval", "1"]
+        },        
+        {
             "name": "Report",
             "type": "debugpy",
             "request": "launch",
