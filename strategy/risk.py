@@ -236,9 +236,9 @@ class RiskManager:
 
     # ── 포지션 진입 검증 ───────────────────────────────────────────────────
 
-    def can_enter(self) -> tuple[bool, str]:
+    def can_enter(self, current_price: int, total_assets: float) -> tuple[bool, str]:
         """
-        신규 진입 가능 여부를 반환한다.
+        신규/추가 진입 가능 여부를 반환한다.
 
         Returns:
             (can_enter: bool, reason: str)
@@ -247,8 +247,20 @@ class RiskManager:
 
         if self._halt_today:
             return False, "당일 거래 중단 상태 (손실 한도 초과)"
+
         if self._position is not None:
-            return False, "이미 포지션 보유 중 (중복 포지션 금지)"
+            current_invested = self._position.qty * self._position.entry_price
+            max_invest = total_assets * config.MAX_POSITION_RATIO
+            if current_invested >= max_invest * 0.99:
+                return (
+                    False,
+                    f"최대 보유 한도 도달 ({current_invested:,.0f}원 >= {max_invest:,.0f}원)",
+                )
+            if max_invest - current_invested < current_price:
+                return (
+                    False,
+                    f"남은 한도가 1주 매수 금액보다 작음 (잔여: {max_invest - current_invested:,.0f}원)",
+                )
         if self._daily_stats.trade_count >= config.MAX_TRADES_PER_DAY:
             return False, f"일일 최대 거래 횟수 초과 ({config.MAX_TRADES_PER_DAY}회)"
 
@@ -287,7 +299,17 @@ class RiskManager:
                 "invest_amount": float,
             }
         """
-        invest_amount = total_assets * config.MAX_POSITION_RATIO
+        base_invest_amount = total_assets * config.SINGLE_TRADE_RATIO
+
+        current_invested = 0.0
+        if self._position is not None:
+            current_invested = self._position.qty * self._position.entry_price
+
+        max_invest = total_assets * config.MAX_POSITION_RATIO
+        remaining_allowance = max_invest - current_invested
+
+        invest_amount = min(base_invest_amount, remaining_allowance)
+
         qty = math.floor(invest_amount / current_price)
         if qty < 1:
             qty = 0
@@ -337,7 +359,7 @@ class RiskManager:
 
     # ── 포지션 등록 ────────────────────────────────────────────────────────
 
-    def open_position(
+    def add_position(
         self,
         ticker: str,
         direction: str,
@@ -346,28 +368,63 @@ class RiskManager:
         stop_loss: float,
         take_profit: float,
     ) -> None:
-        """포지션을 등록하고 일별 거래 카운터를 증가시킨다."""
-        if self._position is not None:
-            raise RuntimeError("이미 포지션이 존재합니다. 중복 포지션 불가.")
+        """포지션을 등록하거나 기존 포지션에 추가한다(물타기/불타기). 평단가를 갱신하고 SL/TP를 재조정한다."""
+        if self._position is None:
+            self._position = Position(
+                ticker=ticker,
+                direction=direction,
+                entry_price=entry_price,
+                qty=qty,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+            )
+            self._daily_stats.trade_count += 1
+            logger.info(
+                "[RiskManager] 신규 포지션 오픈: %s %s %d주 @ %d원 (손절=%.0f, 익절=%.0f)",
+                ticker,
+                direction,
+                qty,
+                entry_price,
+                stop_loss,
+                take_profit,
+            )
+        else:
+            old_qty = self._position.qty
+            old_entry = self._position.entry_price
 
-        self._position = Position(
-            ticker=ticker,
-            direction=direction,
-            entry_price=entry_price,
-            qty=qty,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-        )
-        self._daily_stats.trade_count += 1
-        logger.info(
-            "[RiskManager] 포지션 오픈: %s %s %d주 @ %d원 (손절=%.0f, 익절=%.0f)",
-            ticker,
-            direction,
-            qty,
-            entry_price,
-            stop_loss,
-            take_profit,
-        )
+            new_qty = old_qty + qty
+            # 평단가 가중평균
+            new_entry_price = int(
+                round((old_entry * old_qty + entry_price * qty) / new_qty)
+            )
+
+            # 새로 진입할 때의 '현재가(entry_price)'와 전달받은 'stop_loss'의 괴리율(%)을 구해서 새 평단가에 동일하게 적용.
+            sl_ratio = (entry_price - stop_loss) / entry_price
+            tp_ratio = (take_profit - entry_price) / entry_price
+
+            new_stop_loss = new_entry_price * (1 - sl_ratio)
+            new_take_profit = new_entry_price * (1 + tp_ratio)
+
+            self._position.qty = new_qty
+            self._position.entry_price = new_entry_price
+            self._position.stop_loss = new_stop_loss
+            self._position.take_profit = new_take_profit
+            # 트레일링 스탑 초기화 (평단가가 높아졌으므로 다시 익절가 도달할 때까지 대기)
+            self._position.trailing_active = False
+            self._position.trailing_stop = None
+
+            self._daily_stats.trade_count += 1
+            logger.info(
+                "[RiskManager] 포지션 추가(분할진입): %s %s 추가 %d주 @ %d원 -> 총 %d주 평단 %d원 (새손절=%.0f, 새익절=%.0f)",
+                ticker,
+                direction,
+                qty,
+                entry_price,
+                new_qty,
+                new_entry_price,
+                new_stop_loss,
+                new_take_profit,
+            )
 
     def restore_position(
         self,

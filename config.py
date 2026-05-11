@@ -44,9 +44,6 @@ BASE_URL_REAL: str = "https://openapi.koreainvestment.com:9443"
 BASE_URL_PAPER: str = "https://openapivts.koreainvestment.com:29443"
 
 # ── 실행 주기 ────────────────────────────────────────
-LOOP_INTERVAL_SEC: int = int(
-    os.environ.get("LOOP_INTERVAL_SEC", "60")
-)  # 메인 루프 간격 (초)
 POSITION_CHECK_SEC: int = 10  # 포지션 모니터링 간격 (초)
 POSITION_CHECK_FAST_SEC: int = int(
     os.environ.get("POSITION_CHECK_FAST_SEC", "3")
@@ -161,9 +158,12 @@ CONSEC_BEARISH_BODY_RATIO: float = float(
     os.environ.get("CONSEC_BEARISH_BODY_RATIO", "0.5")
 )
 
+SINGLE_TRADE_RATIO: float = float(
+    os.environ.get("SINGLE_TRADE_RATIO", "0.1")
+)  # 1회 진입 매수 비율 (5%)
 MAX_POSITION_RATIO: float = float(
-    os.environ.get("MAX_POSITION_RATIO", "0.25")
-)  # 최대 투자 비율 (25%)
+    os.environ.get("MAX_POSITION_RATIO", "0.5")
+)  # 총 최대 보유 비율 (25%)
 STOP_LOSS_RATIO: float = float(
     os.environ.get("STOP_LOSS_RATIO", "0.02")
 )  # 손절 비율 (2%)
