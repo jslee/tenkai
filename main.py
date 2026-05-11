@@ -6,25 +6,22 @@
 
 실행 예:
     python main_delphi.py --ticker 005930
+
+    테스트로 한번만 실행한 후 주기를 끝내고 종료
     python main_delphi.py --ticker 005930 --once --real
-    python main_delphi.py --ticker 005930 --once --decision-time 202605091030
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
-import base64
-import json
 import logging
 import os
-import re
 import sys
 from datetime import datetime, time
 from pathlib import Path
 from typing import Any
 
-import aiohttp
 import holidays
 import numpy as np
 
@@ -46,19 +43,17 @@ from logger.trade_log import (
 from make_charts import (
     _build_indicator_frame,
     _prepare_interval_candles,
-    _render_interval_chart,
 )
-from strategy import RiskManager, check_fee_viability, compute_all_indicators
+from strategy import (
+    Arbiter,
+    RiskManager,
+    check_fee_viability,
+    compute_all_indicators,
+    normalize_action,
+)
 
 logger = logging.getLogger(__name__)
 
-
-SYSTEM_PROMPT = """Follow these instructions strictly:
-- Do NOT output thinking or reasoning steps
-- Provide direct, concise answers only
-- Skip any internal monologue or thought process
-- Return only the final answer requested by the user
-"""
 
 DECISION_INTERVALS = (1, 3, 5)
 DECISION_LOOP_INTERVAL_SEC = 60
@@ -134,25 +129,6 @@ def set_title(ticker: str, stock_name: str, mode: str) -> None:
         pass
 
 
-def _encode_image_to_data_url(image_path: Path) -> str:
-    encoded = base64.b64encode(image_path.read_bytes()).decode("ascii")
-    return f"data:image/png;base64,{encoded}"
-
-
-def _build_orderbook_str(prices: list[int], volumes: list[int]) -> str:
-    parts = [f"{price:,}({volume:,})" for price, volume in zip(prices, volumes)]
-    return " / ".join(parts)
-
-
-def _extract_json(text: str) -> dict:
-    text = re.sub(r"```(?:json)?", "", text).strip()
-    start = text.find("{")
-    end = text.rfind("}") + 1
-    if start == -1 or end == 0:
-        raise ValueError("JSON 블록을 찾을 수 없습니다.")
-    return json.loads(text[start:end])
-
-
 def _price_data_from_candle(candle: dict[str, Any]) -> dict[str, Any]:
     return {
         "current_price": int(candle["close"]),
@@ -162,61 +138,6 @@ def _price_data_from_candle(candle: dict[str, Any]) -> dict[str, Any]:
         "high_price": int(candle["high"]),
         "low_price": int(candle["low"]),
     }
-
-
-def _normalize_action(raw_action: Any) -> str:
-    text = str(raw_action or "HOLD").strip().upper()
-    mapping = {
-        "BUY": "BUY",
-        "LONG": "BUY",
-        "매수": "BUY",
-        "SELL": "SELL",
-        "CLOSE": "SELL",
-        "EXIT": "SELL",
-        "청산": "SELL",
-        "매도": "SELL",
-        "HOLD": "HOLD",
-        "WAIT": "HOLD",
-        "KEEP": "HOLD",
-        "관망": "HOLD",
-    }
-    return mapping.get(text, "HOLD")
-
-
-def _coerce_lm_message_text(value: Any) -> str:
-    if isinstance(value, str):
-        return value.strip()
-    if isinstance(value, list):
-        parts: list[str] = []
-        for item in value:
-            if isinstance(item, str):
-                parts.append(item)
-            elif isinstance(item, dict):
-                text = item.get("text") or item.get("content") or ""
-                if text:
-                    parts.append(str(text))
-        return "\n".join(part.strip() for part in parts if part).strip()
-    return ""
-
-
-def _extract_lm_response_text(data: dict[str, Any]) -> str:
-    choices = data.get("choices")
-    if not isinstance(choices, list) or not choices:
-        raise ValueError("LM Studio 응답에 choices가 없습니다.")
-
-    message = choices[0].get("message", {})
-    if not isinstance(message, dict):
-        raise ValueError("LM Studio 응답에 message가 없습니다.")
-
-    content_text = _coerce_lm_message_text(message.get("content"))
-    if content_text:
-        return content_text
-
-    reasoning_text = _coerce_lm_message_text(message.get("reasoning_content"))
-    if reasoning_text:
-        return reasoning_text
-
-    raise ValueError("LM Studio 응답에 content/reasoning_content가 비어 있습니다.")
 
 
 class DelphiTrader:
@@ -254,6 +175,13 @@ class DelphiTrader:
         self.order = KISOrder(self.auth_trade)
         self.risk = RiskManager()
         self.stock_name = self.market.get_stock_name(ticker)
+        self.arbiter = Arbiter(
+            ticker=ticker,
+            stock_name=self.stock_name,
+            intervals=self.intervals,
+            output_dir=self.output_dir,
+            risk=self.risk,
+        )
 
     async def initialize(self) -> None:
         if self.market.is_etf(self.ticker):
@@ -451,161 +379,6 @@ class DelphiTrader:
             "indicators": base_snapshot["indicators"],
         }
 
-    def _build_prompt_text(self, snapshot: dict[str, Any]) -> str:
-        orderbook = snapshot["orderbook"]
-        current_price = snapshot["price_data"]["current_price"]
-
-        pos = self.risk.position
-        if pos:
-            pnl_ratio = (current_price - pos.entry_price) / pos.entry_price * 100
-            if pos.direction == "SELL":
-                pnl_ratio = -pnl_ratio
-            position_text = f"[{pos.direction}] 진입가 {pos.entry_price:,}원 (현재 수익률 {pnl_ratio:+.2f}%)"
-        else:
-            position_text = "없음 (미보유 상태)"
-
-        market_context_text = (
-            f"시장 지수 변동률: {snapshot['market_change']:.2f}%\n"
-            f"체결강도: {snapshot['trade_strength']:.1f}%\n"
-            f"매도호가 상위5(잔량): {_build_orderbook_str(orderbook.get('ask_prices', []), orderbook.get('ask_volumes', []))}\n"
-            f"매수호가 상위5(잔량): {_build_orderbook_str(orderbook.get('bid_prices', []), orderbook.get('bid_volumes', []))}\n"
-            f"호가 잔량비율: {orderbook.get('buy_ratio', 0.5):.1%}"
-        )
-
-        return f"""
-당신은 한국 주식 초단기 트레이딩을 수행하는 전문적인 '퀀트 트레이딩 에이전트'입니다.
-목표: 제공된 멀티 타임프레임 차트와 호가 데이터를 분석하여 즉각적인 매매 의사결정을 내립니다.
-
-[입력 데이터 구성]
-- 최근 차트 이미지 3장 (1분봉, 3분봉, 5분봉 순서)
-  * 차트 포함 지표: 캔들, 볼린저밴드, RSI, 거래량, MACD, EMA(5, 20, 60)
-  * 세 차트 모두 오른쪽 마지막 캔들이 현재 시점입니다.
-- 시장지수/체결강도 및 호가창 텍스트
-- 현재 보유 포지션
-
-[현재 시장/호가 데이터]
-{market_context_text}
-
-[현재 보유 포지션]
-{position_text}
-
-[분석 및 판단 원칙 - 반드시 준수할 것]
-1. 상위 타임프레임 우선의 원칙 (Top-Down Approach):
-   - 5분봉의 추세(Trend)를 '전략적 방향'으로 삼고, 1분/3분봉은 '진입 타이밍'을 결정하는 용도로 사용한다.
-   - 만약 5분봉의 방향과 1분봉의 신호가 충돌할 경우, 반드시 'HOLD'를 선택하여 리스크를 관리한다.
-2. 데이터 교차 검증 (Cross-Verification):
-   - 차트의 기술적 지표(EMA, MACD, 볼린저밴드 등)와 호가창의 수급(매도/매수 잔량비율, 체결강도)이 일치할 때만 강력한 신호로 간주한다.
-   - 예: 가격은 상승 중이나 매도호가 잔량이 압도적으로 많고 체결강도가 급락 중이라면 'SELL' 혹은 'HOLD'를 고려한다.
-3. 액션(BUY/SELL/HOLD) 판단 기준 및 엄격성:
-   - BUY: 상승/반등 진입이 유리하다고 확신할 때만 선택
-   - SELL: 하락 전환 또는 보유 포지션 청산이 유리하다고 확신할 때 선택
-   - HOLD: 불확실하거나 방향성이 모호하면 무조건 관망(HOLD)한다.
-4. 보유 정보를 제공하는 목적은 '매수/매도 전략'을 정교화하기 위함이지, 손실 중인 종목을 무조건 유지하라는 뜻이 아닙니다. 차트의 기술적 신호가 파괴되었다면, 매수가와 관계없이 냉정하게 SELL을 결정하세요.
-
-[출력 형식]
-반드시 아래 구조의 JSON 객체 하나만 반환하십시오. 다른 설명은 생략합니다.
-
-{{
-    "action": "BUY" | "SELL" | "HOLD",
-    "confidence": 0~100, // 판단에 대한 확신도를 숫자로 표현 (80 이상이면 강력한 신호)
-    "analysis": {{
-        "trend": "5분봉 기준의 현재 추세 상태 (상승/하락/횡보)",
-        "momentum": "MACD 및 RSI를 통한 에너지 상태 (강화/약화/중립)",
-        "orderbook": "호가창과 체결강도가 차트 신호를 뒷받침하는지 여부"
-    }},
-    "reason": "최종 결정을 내린 핵심적인 근거 한 문장"
-}}
-""".strip()
-
-    async def _ask_lm_studio(
-        self, prompt_text: str, chart_paths: dict[int, Path]
-    ) -> dict[str, Any]:
-        content: list[dict[str, Any]] = [{"type": "text", "text": prompt_text}]
-        for interval in self.intervals:
-            content.append(
-                {"type": "text", "text": f"다음 이미지는 {interval}분봉 차트입니다."}
-            )
-            content.append(
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": _encode_image_to_data_url(chart_paths[interval])
-                    },
-                }
-            )
-
-        payload = {
-            "model": config.LM_STUDIO_MODEL,
-            "max_tokens": config.LM_STUDIO_MAX_TOKENS,
-            "temperature": config.LM_STUDIO_TEMPERATURE,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": content,
-                },
-            ],
-        }
-
-        timeout = aiohttp.ClientTimeout(total=config.LM_STUDIO_TIMEOUT_SEC)
-        try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    config.LM_STUDIO_BASE_URL, json=payload
-                ) as resp:
-                    resp.raise_for_status()
-                    data = await resp.json()
-        except aiohttp.ClientError as exc:
-            logger.error("[LM Studio] HTTP 오류: %s", exc)
-            return {
-                "action": "HOLD",
-                "reason": str(exc),
-            }
-        except Exception as exc:
-            logger.error("[LM Studio] 호출 실패: %s", exc)
-            return {
-                "action": "HOLD",
-                "reason": str(exc),
-            }
-
-        try:
-            raw_text = _extract_lm_response_text(data)
-            parsed = _extract_json(raw_text)
-        except Exception as exc:
-            logger.error("[LM Studio] 응답 파싱 실패: %s | raw=%s", exc, data)
-            return {
-                "action": "HOLD",
-                "reason": f"응답 파싱 실패: {exc}",
-            }
-
-        parsed["action"] = _normalize_action(parsed.get("action"))
-        parsed.setdefault("reason", "사유 없음")
-        return parsed
-
-    async def _render_charts(
-        self, interval_snapshots: dict[int, dict[str, Any]]
-    ) -> dict[int, Path]:
-        chart_paths: dict[int, Path] = {}
-        now = datetime.now()
-        timestamp = now.strftime("%Y%m%d%H%M%S")
-        for interval in self.intervals:
-            frame = interval_snapshots[interval]["chart_frame"]
-            _render_interval_chart(
-                frame,
-                self.ticker,
-                self.stock_name,
-                interval,
-                self.output_dir,
-                timestamp=timestamp,
-            )
-            # 실제 경로 구성: charts/YYYYMMDD/HH/HHMM_1m.png
-            day = now.strftime("%Y%m%d")
-            hour = now.strftime("%H")
-            hhmm = now.strftime("%H%M")
-            actual_path = self.output_dir / day / hour / f"{hhmm}_{interval}m.png"
-            chart_paths[interval] = actual_path
-        return chart_paths
-
     async def run_cycle(self) -> None:
         now = datetime.now()
         _open = time(*map(int, config.MARKET_OPEN_TIME.split(":")))
@@ -682,11 +455,11 @@ class DelphiTrader:
             )
             return
 
-        chart_paths = await self._render_charts(interval_snapshots)
-        prompt_text = self._build_prompt_text(snapshot)
+        chart_paths = await self.arbiter.render_charts(interval_snapshots)
+        prompt_text = self.arbiter.build_prompt(snapshot)
 
-        decision = await self._ask_lm_studio(prompt_text, chart_paths)
-        ai_action = _normalize_action(decision.get("action"))
+        decision = await self.arbiter.ask(prompt_text, chart_paths)
+        ai_action = normalize_action(decision.get("action"))
         ai_reason = str(decision.get("reason", ""))
 
         executed_action = "HOLD"
