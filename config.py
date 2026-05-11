@@ -100,6 +100,7 @@ BB_PERIOD: int = int(os.environ.get("BB_PERIOD", "20"))
 
 EMA_SHORT: int = int(os.environ.get("EMA_SHORT", "5"))
 EMA_LONG: int = int(os.environ.get("EMA_LONG", "20"))
+EMA_TREND: int = int(os.environ.get("EMA_TREND", "60"))
 
 # HTF(상위 프레임) 리샘플링 배수.
 # CANDLE_INTERVAL × HTF_MULTIPLIER 분봉으로 리샘플링해 EMA_LONG 계산.

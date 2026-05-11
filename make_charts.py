@@ -65,6 +65,9 @@ def _load_chart_config() -> SimpleNamespace:
             "macd_hist_positive_weak": "#f2a4a4",
             "macd_hist_negative": "#0057d8",
             "macd_hist_negative_weak": "#9ec0ff",
+            "ema_short": "#ff1493",
+            "ema_long": "#ffbf00",
+            "ema_trend": "#32cd32",
         },
     }
 
@@ -250,6 +253,9 @@ def _build_indicator_frame(candles_asc: list[dict]) -> pd.DataFrame:
 
     ema_fast = pd.Series(_ema(closes, 12), dtype=float)
     ema_slow = pd.Series(_ema(closes, 26), dtype=float)
+    df["ema_short"] = pd.Series(_ema(closes, config.EMA_SHORT), dtype=float)
+    df["ema_long"] = pd.Series(_ema(closes, config.EMA_LONG), dtype=float)
+    df["ema_trend"] = pd.Series(_ema(closes, config.EMA_TREND), dtype=float)
     df["macd"] = ema_fast - ema_slow
     df["macd_signal"] = pd.Series(_ema(df["macd"].fillna(0.0).tolist(), 9), dtype=float)
     df["macd_hist"] = df["macd"] - df["macd_signal"]
@@ -309,6 +315,35 @@ def _plot_candles_with_bb(ax: plt.Axes, df: pd.DataFrame) -> None:
         linewidth=1.3,
         label="BB Upper",
         zorder=4,
+    )
+    
+    # 지수이동평균(EMA) 렌더링 (chart_config.yaml 색상 적용)
+    ax.plot(
+        df["x"],
+        df["ema_short"],
+        color=colors["ema_short"],
+        linewidth=1.3,
+        linestyle="-",
+        label=f"EMA {config.EMA_SHORT}",
+        zorder=5,
+    )
+    ax.plot(
+        df["x"],
+        df["ema_long"],
+        color=colors["ema_long"],
+        linewidth=1.5,
+        linestyle="-",
+        label=f"EMA {config.EMA_LONG}",
+        zorder=5,
+    )
+    ax.plot(
+        df["x"],
+        df["ema_trend"],
+        color=colors["ema_trend"],
+        linewidth=1.8,
+        linestyle="-",
+        label=f"EMA {config.EMA_TREND}",
+        zorder=5,
     )
     ax.plot(
         df["x"],

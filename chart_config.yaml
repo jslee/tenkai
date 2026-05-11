@@ -37,3 +37,6 @@ colors:
   macd_hist_positive_weak: "#f2a4a4"
   macd_hist_negative: "#0057d8"
   macd_hist_negative_weak: "#9ec0ff"
+  ema_short: "#ff1493"
+  ema_long: "#ffbf00"
+  ema_trend: "#32cd32"

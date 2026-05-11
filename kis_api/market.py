@@ -324,7 +324,7 @@ class KISMarket:
         all_candles = []
         next_hour = "000000"
 
-        virtual_day_offset = 20260110  # 가상 시작 날짜 (형식 맞춤용)
+        current_date_str = ""
         prev_time_val = -1
 
         try:
@@ -377,15 +377,25 @@ class KISMarket:
                         # 가상 날짜 생성 로직 (KIS 서버의 '오늘 날짜 복사 버그' 회피)
                         # 최신->과거로 훑는 중, 090000에서 153000 등 갑자기 숫자가 커지면 어제로 역주행한 것!
                         curr_time_val = int(time_str)
-                        if (
+                        api_date_str = c.get("stck_bsop_date", "")
+
+                        if not current_date_str:
+                            current_date_str = api_date_str
+                        elif (
                             prev_time_val != -1
                             and curr_time_val > prev_time_val + 40000
                         ):
-                            virtual_day_offset -= 1
+                            # 날짜가 바뀌는 시점 (예: 090000 -> 153000)
+                            # KIS API가 이때는 정상적인 과거 날짜를 주지만, 페이지가 넘어가면
+                            # 다시 오늘 날짜를 복사해버리는 버그가 있음.
+                            # 따라서 경계선에서 제대로 된 과거 날짜가 오면 그것을 취하고, 그 외에는 락(lock)을 건다.
+                            if api_date_str and api_date_str < current_date_str:
+                                current_date_str = api_date_str
+
                         prev_time_val = curr_time_val
 
-                        # 8자리 가상 날짜 + 6자리 시간을 합쳐 14자리 완벽 정렬 포맷 생성
-                        timestamp = f"{virtual_day_offset:08d}{time_str}"
+                        # 8자리 실제 날짜 + 6자리 시간을 합쳐 14자리 완벽 정렬 포맷 생성
+                        timestamp = f"{current_date_str}{time_str}"
 
                         # KIS API 특성상 전송 페이징 경계선에서 같은 시간의 봉이 중복 전달될 수 있음
                         if all_candles and all_candles[-1]["timestamp"] == timestamp:
