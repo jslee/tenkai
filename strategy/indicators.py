@@ -371,7 +371,6 @@ def resample_candles(
         return candles_asc
 
     def _aggregate_chunk(chunk: list[dict[str, Any]]) -> dict[str, Any]:
-        elapsed = sum(float(x.get("elapsed_minutes", 1.0)) for x in chunk)
         return {
             "timestamp": chunk[-1].get("timestamp", ""),
             "open": chunk[0]["open"],
@@ -379,7 +378,6 @@ def resample_candles(
             "low": min(x["low"] for x in chunk),
             "close": chunk[-1]["close"],
             "volume": sum(x["volume"] for x in chunk),
-            "elapsed_minutes": max(0.0, min(elapsed, float(interval))),
         }
 
     resampled: list[dict[str, Any]] = []

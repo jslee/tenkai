@@ -58,43 +58,6 @@ def test_compute_all_indicators_skips_duplicate_base_resample(monkeypatch):
     assert calls == [15]
 
 
-def test_resample_candles_preserves_partial_elapsed_minutes():
-    candles_asc = [
-        {
-            "timestamp": "20260508090000",
-            "open": 100,
-            "high": 101,
-            "low": 99,
-            "close": 100,
-            "volume": 1000,
-            "elapsed_minutes": 1.0,
-        },
-        {
-            "timestamp": "20260508090100",
-            "open": 101,
-            "high": 102,
-            "low": 100,
-            "close": 101,
-            "volume": 1100,
-            "elapsed_minutes": 1.0,
-        },
-        {
-            "timestamp": "20260508090200",
-            "open": 102,
-            "high": 103,
-            "low": 101,
-            "close": 102,
-            "volume": 900,
-            "elapsed_minutes": 0.5,
-        },
-    ]
-
-    resampled = indicator_module.resample_candles(candles_asc, 3)
-
-    assert len(resampled) == 1
-    assert resampled[0]["elapsed_minutes"] == 2.5
-
-
 def test_resample_candles_does_not_merge_different_days_same_slot():
     candles_asc = [
         {
@@ -104,7 +67,6 @@ def test_resample_candles_does_not_merge_different_days_same_slot():
             "low": 99,
             "close": 100,
             "volume": 1000,
-            "elapsed_minutes": 1.0,
         },
         {
             "timestamp": "20260508090100",
@@ -113,7 +75,6 @@ def test_resample_candles_does_not_merge_different_days_same_slot():
             "low": 100,
             "close": 101,
             "volume": 1100,
-            "elapsed_minutes": 1.0,
         },
         {
             "timestamp": "20260509090000",
@@ -122,7 +83,6 @@ def test_resample_candles_does_not_merge_different_days_same_slot():
             "low": 199,
             "close": 200,
             "volume": 1200,
-            "elapsed_minutes": 1.0,
         },
         {
             "timestamp": "20260509090100",
@@ -131,7 +91,6 @@ def test_resample_candles_does_not_merge_different_days_same_slot():
             "low": 200,
             "close": 201,
             "volume": 1300,
-            "elapsed_minutes": 1.0,
         },
     ]
 
