@@ -230,3 +230,4 @@ LM_STUDIO_MODEL: str = os.environ.get("LM_STUDIO_MODEL", "google/gemma-4-26b-a4b
 LM_STUDIO_MAX_TOKENS: int = int(os.environ.get("LM_STUDIO_MAX_TOKENS", "512"))
 LM_STUDIO_TEMPERATURE: float = float(os.environ.get("LM_STUDIO_TEMPERATURE", "0.1"))
 LM_STUDIO_TIMEOUT_SEC: int = int(os.environ.get("LM_STUDIO_TIMEOUT_SEC", "60"))
+LM_STUDIO_MIN_CONFIDENCE: int = int(os.environ.get("LM_STUDIO_MIN_CONFIDENCE", "60"))

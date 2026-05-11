@@ -461,6 +461,18 @@ class DelphiTrader:
         decision = await self.arbiter.ask(prompt_text, chart_paths)
         ai_action = normalize_action(decision.get("action"))
         ai_reason = str(decision.get("reason", ""))
+        ai_confidence = int(decision.get("confidence", 0))
+        if (
+            ai_action in ("BUY", "SELL")
+            and ai_confidence < config.LM_STUDIO_MIN_CONFIDENCE
+        ):
+            logger.info(
+                "[Cycle] %s → HOLD 강등 (confidence %d < %d)",
+                ai_action,
+                ai_confidence,
+                config.LM_STUDIO_MIN_CONFIDENCE,
+            )
+            ai_action = "HOLD"
 
         executed_action = "HOLD"
         order_price: int | None = None
@@ -480,10 +492,10 @@ class DelphiTrader:
         )
 
         logger.info(
-            "[Cycle] %s: %s\nConfidence: %s\n%s",
+            "[Cycle] %s: %s\nConfidence: %d\n%s",
             ai_action,
             ai_reason,
-            decision.get("confidence", 0),
+            ai_confidence,
             analysis_str,
         )
 
@@ -579,7 +591,7 @@ class DelphiTrader:
                     for interval in self.intervals
                 },
                 "ai_action": ai_action,
-                "confidence": decision.get("confidence", 0),
+                "confidence": ai_confidence,
                 "analysis": analysis,
             },
         )
