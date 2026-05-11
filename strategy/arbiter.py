@@ -246,21 +246,19 @@ class Arbiter:
             )
 
         payload = {
-            "model": config.LM_STUDIO_MODEL,
-            "max_tokens": config.LM_STUDIO_MAX_TOKENS,
-            "temperature": config.LM_STUDIO_TEMPERATURE,
+            "model": config.ARBITER_MODEL,
+            "max_tokens": config.ARBITER_MAX_TOKENS,
+            "temperature": config.ARBITER_TEMPERATURE,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": content},
             ],
         }
 
-        timeout = aiohttp.ClientTimeout(total=config.LM_STUDIO_TIMEOUT_SEC)
+        timeout = aiohttp.ClientTimeout(total=config.ARBITER_TIMEOUT_SEC)
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    config.LM_STUDIO_BASE_URL, json=payload
-                ) as resp:
+                async with session.post(config.ARBITER_BASE_URL, json=payload) as resp:
                     resp.raise_for_status()
                     data = await resp.json()
         except aiohttp.ClientError as exc:

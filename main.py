@@ -464,13 +464,13 @@ class DelphiTrader:
         ai_confidence = int(decision.get("confidence", 0))
         if (
             ai_action in ("BUY", "SELL")
-            and ai_confidence < config.LM_STUDIO_MIN_CONFIDENCE
+            and ai_confidence < config.ARBITER_MIN_CONFIDENCE
         ):
             logger.info(
                 "[Cycle] %s → HOLD 강등 (confidence %d < %d)",
                 ai_action,
                 ai_confidence,
-                config.LM_STUDIO_MIN_CONFIDENCE,
+                config.ARBITER_MIN_CONFIDENCE,
             )
             ai_action = "HOLD"
 
@@ -551,7 +551,7 @@ class DelphiTrader:
                 qty = pos.qty
                 await self.order.sell_market(self.ticker, qty)
                 pnl = self.risk.close_position(
-                    current_price, close_reason="LM_STUDIO_SELL"
+                    current_price, close_reason="ARBITER_SELL"
                 )
                 write_close_log(
                     ticker=self.ticker,
@@ -559,7 +559,7 @@ class DelphiTrader:
                     qty=qty,
                     entry_price=entry_price,
                     pnl=pnl,
-                    close_reason="LM_STUDIO_SELL",
+                    close_reason="ARBITER_SELL",
                     entry_time=entry_time,
                 )
                 executed_action = "SELL"

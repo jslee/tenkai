@@ -222,12 +222,12 @@ STOCK_CODE_DIR: str = os.environ.get(
     "STOCK_CODE_DIR", "."
 )  # kospi_code.mst, kosdaq_code.mst 위치
 
-# ── LM Studio 파라미터 ───────────────────────────────
-LM_STUDIO_BASE_URL: str = os.environ.get(
-    "LM_STUDIO_BASE_URL", "http://127.0.0.1:1234/v1/chat/completions"
+# ── Arbiter 파라미터 (LM Studio) ────────────────────────────────
+ARBITER_BASE_URL: str = os.environ.get(
+    "ARBITER_BASE_URL", "http://127.0.0.1:1234/v1/chat/completions"
 )
-LM_STUDIO_MODEL: str = os.environ.get("LM_STUDIO_MODEL", "google/gemma-4-26b-a4b")
-LM_STUDIO_MAX_TOKENS: int = int(os.environ.get("LM_STUDIO_MAX_TOKENS", "512"))
-LM_STUDIO_TEMPERATURE: float = float(os.environ.get("LM_STUDIO_TEMPERATURE", "0.1"))
-LM_STUDIO_TIMEOUT_SEC: int = int(os.environ.get("LM_STUDIO_TIMEOUT_SEC", "60"))
-LM_STUDIO_MIN_CONFIDENCE: int = int(os.environ.get("LM_STUDIO_MIN_CONFIDENCE", "60"))
+ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "google/gemma-4-26b-a4b")
+ARBITER_MAX_TOKENS: int = int(os.environ.get("ARBITER_MAX_TOKENS", "512"))
+ARBITER_TEMPERATURE: float = float(os.environ.get("ARBITER_TEMPERATURE", "0.1"))
+ARBITER_TIMEOUT_SEC: int = int(os.environ.get("ARBITER_TIMEOUT_SEC", "60"))
+ARBITER_MIN_CONFIDENCE: int = int(os.environ.get("ARBITER_MIN_CONFIDENCE", "60"))
