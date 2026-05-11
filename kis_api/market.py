@@ -484,16 +484,13 @@ class KISMarket:
                     data = await resp.json()
 
             output1 = data.get("output1", {})
-            output2 = data.get("output2")
-            if not isinstance(output2, list):
-                output2 = []
 
             ask_prices, ask_volumes, bid_prices, bid_volumes = [], [], [], []
-            for item in output2[:5]:
-                ask_prices.append(int(item.get("askp", 0)))
-                ask_volumes.append(int(item.get("askp_rsqn", 0)))
-                bid_prices.append(int(item.get("bidp", 0)))
-                bid_volumes.append(int(item.get("bidp_rsqn", 0)))
+            for i in range(1, 6):
+                ask_prices.append(int(output1.get(f"askp{i}", 0)))
+                ask_volumes.append(int(output1.get(f"askp_rsqn{i}", 0)))
+                bid_prices.append(int(output1.get(f"bidp{i}", 0)))
+                bid_volumes.append(int(output1.get(f"bidp_rsqn{i}", 0)))
 
             total_ask = sum(ask_volumes)
             total_bid = sum(bid_volumes)

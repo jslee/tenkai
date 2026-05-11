@@ -99,11 +99,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--debug", action="store_true", help="DEBUG 로그 출력")
     parser.add_argument("--once", action="store_true", help="1회만 실행 후 종료")
     parser.add_argument(
-        "--decision-time",
-        type=str,
-        help="테스트용 판단 시점. YYYYMMDDHHMM[SS], YYYYMMDDHHMM, HHMM[SS] 지원",
-    )
-    parser.add_argument(
         "--plot-count",
         type=int,
         default=int(_CHART_DEFAULTS["plot_count"]),
@@ -156,72 +151,6 @@ def _extract_json(text: str) -> dict:
     if start == -1 or end == 0:
         raise ValueError("JSON 블록을 찾을 수 없습니다.")
     return json.loads(text[start:end])
-
-
-def _normalize_candle_timestamp(timestamp: str) -> str:
-    text = str(timestamp or "").strip()
-    return text[-14:] if len(text) >= 14 else text
-
-
-def _format_decision_timestamp(timestamp: str | None) -> str | None:
-    if not timestamp:
-        return None
-    try:
-        return datetime.strptime(timestamp, "%Y%m%d%H%M%S").strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
-    except ValueError:
-        return timestamp
-
-
-def _resolve_decision_timestamp(
-    raw_value: str | None, candles_desc: list[dict[str, Any]]
-) -> str | None:
-    if not raw_value:
-        return None
-
-    value = str(raw_value).strip()
-    if not value:
-        return None
-
-    latest_ts = _normalize_candle_timestamp(candles_desc[0].get("timestamp", ""))
-    latest_date = latest_ts[:8] if len(latest_ts) >= 8 else ""
-
-    if len(value) == 4:
-        value = f"{latest_date}{value}00"
-    elif len(value) == 6:
-        value = f"{latest_date}{value}"
-    elif len(value) == 12:
-        value = f"{value}00"
-    elif len(value) != 14:
-        raise ValueError(
-            "decision-time 형식이 올바르지 않습니다. YYYYMMDDHHMM[SS] 또는 HHMM[SS]를 사용하세요."
-        )
-
-    try:
-        datetime.strptime(value, "%Y%m%d%H%M%S")
-    except ValueError as exc:
-        raise ValueError(
-            "decision-time 형식이 올바르지 않습니다. YYYYMMDDHHMM[SS] 또는 HHMM[SS]를 사용하세요."
-        ) from exc
-    return value
-
-
-def _slice_candles_for_decision_time(
-    candles_desc: list[dict[str, Any]], decision_timestamp: str | None
-) -> list[dict[str, Any]]:
-    if decision_timestamp is None:
-        return candles_desc
-
-    filtered = [
-        candle
-        for candle in candles_desc
-        if _normalize_candle_timestamp(candle.get("timestamp", ""))
-        <= decision_timestamp
-    ]
-    if not filtered:
-        raise ValueError(f"지정 시점 {decision_timestamp} 이전 캔들이 없습니다.")
-    return filtered
 
 
 def _price_data_from_candle(candle: dict[str, Any]) -> dict[str, Any]:
@@ -296,13 +225,11 @@ class DelphiTrader:
         ticker: str,
         plot_count: int,
         output_dir: Path,
-        decision_time: str | None = None,
     ) -> None:
         self.ticker = ticker
         self.intervals = DECISION_INTERVALS
         self.plot_count = plot_count
         self.output_dir = output_dir
-        self.decision_time_input = decision_time
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         self.auth_data = KISAuth(
@@ -480,30 +407,11 @@ class DelphiTrader:
         candles_desc_raw = await self.market.get_minute_candles(
             self.ticker, count=config.CANDLE_COUNT
         )
-        decision_timestamp = _resolve_decision_timestamp(
-            self.decision_time_input, candles_desc_raw
-        )
-        candles_desc = _slice_candles_for_decision_time(
-            candles_desc_raw, decision_timestamp
-        )
-
-        if decision_timestamp is None:
-            price_data = await self.market.get_current_price(self.ticker)
-            orderbook = await self.market.get_orderbook(self.ticker)
-            market_change = await self.market.get_market_index_change()
-            trade_strength = await self.market.get_trade_strength(self.ticker)
-        else:
-            latest_visible_candle = candles_desc[0]
-            price_data = _price_data_from_candle(latest_visible_candle)
-            orderbook = {
-                "ask_prices": [],
-                "ask_volumes": [],
-                "bid_prices": [],
-                "bid_volumes": [],
-                "buy_ratio": 0.5,
-            }
-            market_change = 0.0
-            trade_strength = 0.0
+        candles_desc = candles_desc_raw
+        price_data = await self.market.get_current_price(self.ticker)
+        orderbook = await self.market.get_orderbook(self.ticker)
+        market_change = await self.market.get_market_index_change()
+        trade_strength = await self.market.get_trade_strength(self.ticker)
 
         balance = await self.market.get_balance()
 
@@ -541,61 +449,17 @@ class DelphiTrader:
             "interval_snapshots": interval_snapshots,
             "analysis_candles": base_snapshot["analysis_candles"],
             "indicators": base_snapshot["indicators"],
-            "decision_timestamp": decision_timestamp,
-            "decision_timestamp_label": _format_decision_timestamp(decision_timestamp),
-            "decision_is_historical": decision_timestamp is not None,
-            "decision_current_time": (
-                datetime.strptime(decision_timestamp, "%Y%m%d%H%M%S")
-                if decision_timestamp is not None
-                else None
-            ),
         }
 
-    def _build_prompt_text(
-        self, snapshot: dict[str, Any], chart_paths: dict[int, Path]
-    ) -> str:
-        price_data = snapshot["price_data"]
+    def _build_prompt_text(self, snapshot: dict[str, Any]) -> str:
         orderbook = snapshot["orderbook"]
-        interval_snapshots = snapshot["interval_snapshots"]
-        decision_timestamp_label = snapshot.get("decision_timestamp_label")
-        decision_is_historical = bool(snapshot.get("decision_is_historical"))
 
-        interval_summaries = []
-        for interval in self.intervals:
-            indicators = interval_snapshots[interval]["indicators"]
-            interval_summaries.append(
-                f"- {interval}분봉 ({chart_paths[interval].name}): RSI {float(indicators.get('rsi', 0.0)):.1f}, "
-                f"MACD {float(indicators.get('macd', 0.0)):.1f}, "
-                f"Signal {float(indicators.get('macd_signal', 0.0)):.1f}, "
-                f"Hist {float(indicators.get('macd_histogram', 0.0)):.1f}, "
-                f"ATR {float(indicators.get('atr', 0.0)):.1f}"
-            )
-        interval_summary_text = "\n".join(interval_summaries)
-        decision_context_text = (
-            f"판단 시점: {decision_timestamp_label}\n"
-            if decision_timestamp_label
-            else ""
-        )
-        historical_mode_text = ""
-        if decision_is_historical:
-            historical_mode_text = (
-                "- 이 테스트는 지정 시점 재현입니다. 차트의 마지막 봉을 해당 시점으로 보고 판단하세요.\n"
-                "- 호가창, 체결강도, 시장지수는 지정 시점의 실제 값이 아니므로 판단 근거에서 제외하세요.\n"
-            )
         market_context_text = (
-            "시장 지수 변동률: 테스트 모드에서는 사용 안 함\n"
-            "체결강도: 테스트 모드에서는 사용 안 함\n"
-            "매도호가(상위5): 테스트 모드에서는 사용 안 함\n"
-            "매수호가(상위5): 테스트 모드에서는 사용 안 함\n"
-            "호가 잔량비율: 테스트 모드에서는 사용 안 함"
-            if decision_is_historical
-            else (
-                f"시장 지수 변동률: {snapshot['market_change']:.2f}%\n"
-                f"체결강도: {snapshot['trade_strength']:.1f}%\n"
-                f"매도호가(상위5): {_build_orderbook_str(orderbook.get('ask_prices', []), orderbook.get('ask_volumes', []))}\n"
-                f"매수호가(상위5): {_build_orderbook_str(orderbook.get('bid_prices', []), orderbook.get('bid_volumes', []))}\n"
-                f"호가 잔량비율: {orderbook.get('buy_ratio', 0.5):.1%}"
-            )
+            f"시장 지수 변동률: {snapshot['market_change']:.2f}%\n"
+            f"체결강도: {snapshot['trade_strength']:.1f}%\n"
+            f"매도호가 상위5(잔량): {_build_orderbook_str(orderbook.get('ask_prices', []), orderbook.get('ask_volumes', []))}\n"
+            f"매수호가 상위5(잔량): {_build_orderbook_str(orderbook.get('bid_prices', []), orderbook.get('bid_volumes', []))}\n"
+            f"호가 잔량비율: {orderbook.get('buy_ratio', 0.5):.1%}"
         )
 
         return f"""
@@ -604,7 +468,7 @@ class DelphiTrader:
 입력으로 받는 내용:
 - 최근 차트 이미지 3장 (1분봉, 3분봉, 5분봉 순서)
 - 호가창 텍스트
-- 현재가/체결강도/시장지수 정보
+- 체결강도 및 시장지수 정보
 
 차트에는 최소한 다음 정보가 포함되어 있습니다.
 - 볼린저밴드
@@ -614,21 +478,16 @@ class DelphiTrader:
 - EMA(5,20,60)
 
 판단 원칙:
-- 지수이동평균선이 첨부 이미지 순서는 1분봉, 3분봉, 5분봉입니다.
-- 차트에 포함된 볼린저밴드, RSI, 거래량, MACD를 직접 확인하세요.
+- 세 차트 모두에서 오른쪽 마지막 봉이 현재시점입니다.
+- 첨부 이미지 순서는 1분봉, 3분봉, 5분봉입니다.
+- 차트에 포함된 지수이동평균선(EMA), 볼린저밴드, RSI, 거래량, MACD를 직접 확인하세요.
 - 호가창과 체결강도는 차트 해석을 보강하거나 반박하는 근거로 사용하세요.
 - 반드시 현재 시점 기준으로 BUY, SELL, HOLD 중 하나만 선택하세요.
 - BUY는 상승/반등 진입이 유리하다고 판단될 때 선택하세요.
 - SELL은 하락 전환 또는 청산이 유리하다고 판단될 때 선택하세요.
 - 불확실하면 HOLD를 선택하세요.
 
-종목코드: {self.ticker}
-종목명: {self.stock_name}
-{decision_context_text}{historical_mode_text}현재가: {price_data['current_price']:,}원
-시가/고가/저가: {price_data['open_price']:,}/{price_data['high_price']:,}/{price_data['low_price']:,}
 {market_context_text}
-분봉별 지표 요약:
-{interval_summary_text}
 
 위 차트와 호가 정보를 기준으로 지금 시점의 단일 액션을 판단하세요.
 - 1분봉, 3분봉, 5분봉 차트를 함께 보고 마지막 시점의 방향성을 종합 판단하세요.
@@ -803,7 +662,8 @@ class DelphiTrader:
             return
 
         chart_paths = await self._render_charts(interval_snapshots)
-        prompt_text = self._build_prompt_text(snapshot, chart_paths)
+        prompt_text = self._build_prompt_text(snapshot)
+
         decision = await self._ask_lm_studio(prompt_text, chart_paths)
         ai_action = _normalize_action(decision.get("action"))
         ai_reason = str(decision.get("reason", ""))
@@ -814,13 +674,13 @@ class DelphiTrader:
         stop_loss: float | None = None
         take_profit: float | None = None
 
-        if ai_action == "HOLD":
-            logger.info(
-                "[Cycle] AI 보류: action=%s reason=%s",
-                ai_action,
-                ai_reason,
-            )
-        elif ai_action == "BUY":
+        logger.info(
+            "[Cycle] %s: %s",
+            ai_action,
+            ai_reason,
+        )
+
+        if ai_action == "BUY":
             can_enter, enter_reason = self.risk.can_enter()
             if not can_enter:
                 logger.info("[Cycle] BUY 진입 불가: %s", enter_reason)
@@ -865,7 +725,7 @@ class DelphiTrader:
         elif ai_action == "SELL":
             pos = self.risk.position
             if pos is None:
-                logger.info("[Cycle] SELL 권고 무시 — 보유 포지션 없음")
+                logger.info("[Cycle] SELL 진입 불가: 보유 포지션 없음")
             else:
                 entry_time = pos.entry_time
                 entry_price = pos.entry_price
@@ -926,9 +786,7 @@ class DelphiTrader:
         try:
             while True:
                 now = datetime.now()
-                if self.decision_time_input:
-                    await self.run_cycle()
-                elif now.weekday() >= 5 or now.date() in kr_holidays:
+                if now.weekday() >= 5 or now.date() in kr_holidays:
                     logger.debug("[Main] 주말/공휴일 — 사이클 생략")
                 else:
                     await self.run_cycle()
@@ -979,10 +837,7 @@ async def _async_main(args: argparse.Namespace) -> None:
         logger.warning("실투자 모드로 실행합니다.")
 
     trader = DelphiTrader(
-        ticker=args.ticker,
-        plot_count=args.plot_count,
-        output_dir=Path(args.output_dir),
-        decision_time=args.decision_time,
+        ticker=args.ticker, plot_count=args.plot_count, output_dir=Path(args.output_dir)
     )
     await trader.initialize()
     try:

@@ -109,7 +109,6 @@ KIS: 현재가/분봉/호가/체결강도/지수/잔고
 ```bash
 python main.py --ticker 005930
 python main.py --ticker 005930 --once --real
-python main.py --ticker 005930 --once --decision-time 202605091030
 ```
 
 ### 주요 인자
@@ -120,7 +119,6 @@ python main.py --ticker 005930 --once --decision-time 202605091030
 | --real | 실투자 모드 (기본은 모의) |
 | --debug | 디버그 로그 |
 | --once | 1회 실행 후 종료 |
-| --decision-time | 과거 시점 재현 테스트 |
 | --plot-count | arbiter 전달용 차트 봉 수 |
 | --output-dir | 차트 출력 디렉터리 |
 
