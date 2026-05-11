@@ -21,10 +21,10 @@ logger = logging.getLogger(__name__)
 
 # 장 운영 시간 파싱
 _MARKET_OPEN = time(*map(int, config.MARKET_OPEN_TIME.split(":")))
-_ENTRY_CUTOFF = time(*map(int, config.ENTRY_CUTOFF_TIME.split(":")))
-_MARKET_CLOSE = time(
-    *map(int, config.MARKET_CLOSE_TIME.split(":"))
-)  # 강제 청산용 참조 전용
+_MARKET_CLOSE = time(*map(int, config.MARKET_CLOSE_TIME.split(":")))
+
+# 연속된 동일 기각 사유의 중복 로깅 방지용 상태 변수
+_last_gate_fail_reason = None
 
 
 def gate_market_filter(market_data: dict) -> tuple[bool, dict]:
@@ -44,6 +44,8 @@ def gate_market_filter(market_data: dict) -> tuple[bool, dict]:
         (passed: bool, result: dict)
         result에 실패 이유 또는 통과 내역 포함
     """
+    global _last_gate_fail_reason
+
     checks: list[dict] = []
     passed = True
     halt_trading_today = False
@@ -55,13 +57,13 @@ def gate_market_filter(market_data: dict) -> tuple[bool, dict]:
         current_t = current_time
 
     # ── 1. 거래 시간 확인 ─────────────────────────────────────────────────
-    in_trading_hours = _MARKET_OPEN <= current_t <= _ENTRY_CUTOFF
+    in_trading_hours = _MARKET_OPEN <= current_t <= _MARKET_CLOSE
     if not in_trading_hours:
         checks.append(
             {
                 "check": "trading_hours",
                 "passed": False,
-                "detail": f"장외 시간 ({current_t.strftime('%H:%M')}). 허용: {config.MARKET_OPEN_TIME}~{config.ENTRY_CUTOFF_TIME}",
+                "detail": f"장외 시간. 허용: {config.MARKET_OPEN_TIME}~{config.MARKET_CLOSE_TIME}",
             }
         )
         passed = False
@@ -161,11 +163,12 @@ def gate_market_filter(market_data: dict) -> tuple[bool, dict]:
 
     if not passed:
         failed_checks = [c for c in checks if not c["passed"]]
-        logger.info(
-            "[Gate] 기각 — %s",
-            " | ".join(c["detail"] for c in failed_checks),
-        )
+        fail_reason = " | ".join(c["detail"] for c in failed_checks)
+        if fail_reason != _last_gate_fail_reason:
+            logger.info("[Gate] 기각 — %s", fail_reason)
+            _last_gate_fail_reason = fail_reason
     else:
+        _last_gate_fail_reason = None
         logger.debug("[Gate] 통과")
 
     return passed, result

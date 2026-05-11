@@ -77,10 +77,8 @@ CANDLE_INTERVAL: int = int(os.environ.get("CANDLE_INTERVAL", "1"))
 # 진입 가능 시작 시각 (장 시작 직후 갭 변동 회피-> +10분)
 MARKET_OPEN_TIME: str = "09:10"
 # 장 마감 강제 청산 시각 (HOLD_OVERNIGHT=False 시 미청산 포지션 강제 청산)
-MARKET_CLOSE_TIME: str = "15:00"
-# 신규 진입 차단 시각 — MARKET_CLOSE_TIME에서 MIN_HOLD_MINUTES(아래에서 정의)를 뺀 값으로 자동 계산됨.
-# gate에서 이 시각 이후 신규 BUY/SELL 진입을 차단하여, 마감 직전 진입 후 즉시 강제청산되는 상황을 방지한다.
-# (별도 오버라이드가 필요한 경우 .env에서 ENTRY_CUTOFF_TIME="14:30" 식으로 지정 가능)
+MARKET_CLOSE_TIME: str = "15:10"
+
 
 # ── 오버나이트 및 종료 설정 ─────────────────────────────────────
 # HOLD_OVERNIGHT: True이면 장 마감 시 청산하지 않고 포지션 유지 (오버나이트 허용)
@@ -115,28 +113,6 @@ HTF_MULTIPLIER: int = int(os.environ.get("HTF_MULTIPLIER", "5"))
 # 저변동성 구간을 걸러낸다. arbiter 호출 전에 먼저 체크해 LLM 비용도 절감.
 # 예) 1.5 → TP 거리가 수수료 × 1.5 = 0.345% 이상일 때만 진입.
 MIN_PROFIT_BUFFER: float = float(os.environ.get("MIN_PROFIT_BUFFER", "1.5"))
-
-# SIGNAL_SELL에 의한 조기 청산을 방지하는 최소 보유 시간 (분).
-# 진입 후 이 시간이 경과하지 않으면 조기 청산을 억제하고 포지션 유지.
-# 손절(SL)·트레일링 스탑은 모니터 루프에서 별도 처리되므로 이 설정과 무관하게 작동.
-# TP 도달 전 역방향 신호로 인한 조기 청산을 방지해 수수료 대비 수익률 개선.
-MIN_HOLD_MINUTES: float = float(os.environ.get("MIN_HOLD_MINUTES", "20.0"))
-
-
-# 신규 진입 차단 시각 — MARKET_CLOSE_TIME에서 MIN_HOLD_MINUTES를 뺀 값으로 자동 계산.
-# .env에서 ENTRY_CUTOFF_TIME을 명시하면 그 값을 우선 사용한다.
-def _calc_entry_cutoff() -> str:
-    from datetime import datetime, timedelta
-
-    override = os.environ.get("ENTRY_CUTOFF_TIME", "")
-    if override:
-        return override
-    close_dt = datetime.strptime(MARKET_CLOSE_TIME, "%H:%M")
-    cutoff_dt = close_dt - timedelta(minutes=MIN_HOLD_MINUTES)
-    return cutoff_dt.strftime("%H:%M")
-
-
-ENTRY_CUTOFF_TIME: str = _calc_entry_cutoff()
 
 
 # ── 리스크 관리 ──────────────────────────────────────

@@ -148,7 +148,6 @@ python main.py --ticker 005930 --once --real
 - POSITION_CHECK_SEC, POSITION_CHECK_FAST_SEC, POSITION_CHECK_FAST_ATR_BUFFER
 - CANDLE_COUNT, CANDLE_INTERVAL
 - MARKET_OPEN_TIME, MARKET_CLOSE_TIME
-- MIN_HOLD_MINUTES -> ENTRY_CUTOFF_TIME 자동 계산
 - HOLD_OVERNIGHT, FORCE_CLOSE_ON_EXIT
 
 ### 지표/진입 보조
@@ -208,7 +207,7 @@ def gate_market_filter(market_data: dict) -> tuple[bool, dict]
 
 ## 7. arbiter(LM Studio) 규칙
 
-파일: main.py (DelphiTrader._build_prompt_text / _ask_lm_studio)
+파일: main.py (DelphiTrader._build_prompt_text /_ask_lm_studio)
 
 입력:
 
@@ -266,7 +265,7 @@ def gate_market_filter(market_data: dict) -> tuple[bool, dict]
 ## 9. 로깅 규칙
 
 파일: logger/trade_log.py
-형식: JSONL, 종목별 파일 logs/trades_<ticker>.jsonl
+형식: JSONL, 종목별 파일 logs/trades_{ticker}.jsonl
 
 사이클 로그 키:
 

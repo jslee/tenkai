@@ -453,6 +453,16 @@ class DelphiTrader:
 
     def _build_prompt_text(self, snapshot: dict[str, Any]) -> str:
         orderbook = snapshot["orderbook"]
+        current_price = snapshot["price_data"]["current_price"]
+
+        pos = self.risk.position
+        if pos:
+            pnl_ratio = (current_price - pos.entry_price) / pos.entry_price * 100
+            if pos.direction == "SELL":
+                pnl_ratio = -pnl_ratio
+            position_text = f"[{pos.direction}] 진입가 {pos.entry_price:,}원 (현재 수익률 {pnl_ratio:+.2f}%)"
+        else:
+            position_text = "없음 (미보유 상태)"
 
         market_context_text = (
             f"시장 지수 변동률: {snapshot['market_change']:.2f}%\n"
@@ -463,40 +473,47 @@ class DelphiTrader:
         )
 
         return f"""
-당신은 한국 주식 단기매매 보조 AI입니다.
+당신은 한국 주식 초단기 트레이딩을 수행하는 전문적인 '퀀트 트레이딩 에이전트'입니다.
+목표: 제공된 멀티 타임프레임 차트와 호가 데이터를 분석하여 즉각적인 매매 의사결정을 내립니다.
 
-입력으로 받는 내용:
+[입력 데이터 구성]
 - 최근 차트 이미지 3장 (1분봉, 3분봉, 5분봉 순서)
-- 호가창 텍스트
-- 체결강도 및 시장지수 정보
+  * 차트 포함 지표: 캔들, 볼린저밴드, RSI, 거래량, MACD, EMA(5, 20, 60)
+  * 세 차트 모두 오른쪽 마지막 캔들이 현재 시점입니다.
+- 시장지수/체결강도 및 호가창 텍스트
+- 현재 보유 포지션
 
-차트에는 최소한 다음 정보가 포함되어 있습니다.
-- 볼린저밴드
-- RSI
-- 거래량
-- MACD
-- EMA(5,20,60)
-
-판단 원칙:
-- 세 차트 모두에서 오른쪽 마지막 봉이 현재시점입니다.
-- 첨부 이미지 순서는 1분봉, 3분봉, 5분봉입니다.
-- 차트에 포함된 지수이동평균선(EMA), 볼린저밴드, RSI, 거래량, MACD를 직접 확인하세요.
-- 호가창과 체결강도는 차트 해석을 보강하거나 반박하는 근거로 사용하세요.
-- 반드시 현재 시점 기준으로 BUY, SELL, HOLD 중 하나만 선택하세요.
-- BUY는 상승/반등 진입이 유리하다고 판단될 때 선택하세요.
-- SELL은 하락 전환 또는 청산이 유리하다고 판단될 때 선택하세요.
-- 불확실하면 HOLD를 선택하세요.
-
+[현재 시장/호가 데이터]
 {market_context_text}
 
-위 차트와 호가 정보를 기준으로 지금 시점의 단일 액션을 판단하세요.
-- 1분봉, 3분봉, 5분봉 차트를 함께 보고 마지막 시점의 방향성을 종합 판단하세요.
-- reason에는 핵심 근거만 짧게 설명하세요.
+[현재 보유 포지션]
+{position_text}
 
-반드시 아래 JSON 하나만 반환하세요.
+[분석 및 판단 원칙 - 반드시 준수할 것]
+1. 상위 타임프레임 우선의 원칙 (Top-Down Approach):
+   - 5분봉의 추세(Trend)를 '전략적 방향'으로 삼고, 1분/3분봉은 '진입 타이밍'을 결정하는 용도로 사용한다.
+   - 만약 5분봉의 방향과 1분봉의 신호가 충돌할 경우, 반드시 'HOLD'를 선택하여 리스크를 관리한다.
+2. 데이터 교차 검증 (Cross-Verification):
+   - 차트의 기술적 지표(EMA, MACD, 볼린저밴드 등)와 호가창의 수급(매도/매수 잔량비율, 체결강도)이 일치할 때만 강력한 신호로 간주한다.
+   - 예: 가격은 상승 중이나 매도호가 잔량이 압도적으로 많고 체결강도가 급락 중이라면 'SELL' 혹은 'HOLD'를 고려한다.
+3. 액션(BUY/SELL/HOLD) 판단 기준 및 엄격성:
+   - BUY: 상승/반등 진입이 유리하다고 확신할 때만 선택
+   - SELL: 하락 전환 또는 보유 포지션 청산이 유리하다고 확신할 때 선택
+   - HOLD: 불확실하거나 방향성이 모호하면 무조건 관망(HOLD)한다.
+4. 보유 정보를 제공하는 목적은 '매수/매도 전략'을 정교화하기 위함이지, 손실 중인 종목을 무조건 유지하라는 뜻이 아닙니다. 차트의 기술적 신호가 파괴되었다면, 매수가와 관계없이 냉정하게 SELL을 결정하세요.
+
+[출력 형식]
+반드시 아래 구조의 JSON 객체 하나만 반환하십시오. 다른 설명은 생략합니다.
+
 {{
     "action": "BUY" | "SELL" | "HOLD",
-    "reason": "판단 이유를 짧게 설명"
+    "confidence": 0~100, // 판단에 대한 확신도를 숫자로 표현 (80 이상이면 강력한 신호)
+    "analysis": {{
+        "trend": "5분봉 기준의 현재 추세 상태 (상승/하락/횡보)",
+        "momentum": "MACD 및 RSI를 통한 에너지 상태 (강화/약화/중립)",
+        "orderbook": "호가창과 체결강도가 차트 신호를 뒷받침하는지 여부"
+    }},
+    "reason": "최종 결정을 내린 핵심적인 근거 한 문장"
 }}
 """.strip()
 
@@ -674,10 +691,23 @@ class DelphiTrader:
         stop_loss: float | None = None
         take_profit: float | None = None
 
+        analysis = decision.get("analysis", {})
+        analysis_str = (
+            (
+                f"\n  - Trend: {analysis.get('trend', 'N/A')}"
+                f"\n  - Momentum: {analysis.get('momentum', 'N/A')}"
+                f"\n  - Orderbook: {analysis.get('orderbook', 'N/A')}"
+            )
+            if analysis
+            else ""
+        )
+
         logger.info(
-            "[Cycle] %s: %s",
+            "[Cycle] %s: %s\nConfidence: %s\n%s",
             ai_action,
             ai_reason,
+            decision.get("confidence", 0),
+            analysis_str,
         )
 
         if ai_action == "BUY":
@@ -772,6 +802,8 @@ class DelphiTrader:
                     for interval in self.intervals
                 },
                 "ai_action": ai_action,
+                "confidence": decision.get("confidence", 0),
+                "analysis": analysis,
             },
         )
 
