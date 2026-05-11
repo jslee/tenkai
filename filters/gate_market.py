@@ -5,23 +5,19 @@ filters/gate_market.py — 시장 환경 필터 (gate)
 불확실한 상황에서는 항상 passed=False (거래 안 함)
 
 체크 항목:
-- 거래 시간: MARKET_OPEN_TIME ~ MARKET_CLOSE_TIME (config 참조)
 - 코스피 지수 변동: MARKET_DROP_THRESHOLD 초과 폭락 시 기각
 - 거래 활성: 당일 누적 거래량 > 0 (거래 정지 여부)
 - 서킷브레이커 발동 여부
 - 당일 손실 한도 초과 여부
+
+거래 시간 체크는 run_cycle() 진입 전에 수행한다.
 """
 
 import logging
-from datetime import datetime, time
 
 import config
 
 logger = logging.getLogger(__name__)
-
-# 장 운영 시간 파싱
-_MARKET_OPEN = time(*map(int, config.MARKET_OPEN_TIME.split(":")))
-_MARKET_CLOSE = time(*map(int, config.MARKET_CLOSE_TIME.split(":")))
 
 # 연속된 동일 기각 사유의 중복 로깅 방지용 상태 변수
 _last_gate_fail_reason = None
@@ -33,7 +29,6 @@ def gate_market_filter(market_data: dict) -> tuple[bool, dict]:
 
     Args:
         market_data: {
-            "current_time": datetime,           # 현재 시각
             "market_change": float,             # 지수 등락률 (%)
             "current_volume": int,              # 당일 누적 거래량
             "circuit_breaker": bool,            # 서킷브레이커 발동 여부
@@ -50,33 +45,7 @@ def gate_market_filter(market_data: dict) -> tuple[bool, dict]:
     passed = True
     halt_trading_today = False
 
-    current_time = market_data.get("current_time", datetime.now())
-    if isinstance(current_time, datetime):
-        current_t = current_time.time()
-    else:
-        current_t = current_time
-
-    # ── 1. 거래 시간 확인 ─────────────────────────────────────────────────
-    in_trading_hours = _MARKET_OPEN <= current_t <= _MARKET_CLOSE
-    if not in_trading_hours:
-        checks.append(
-            {
-                "check": "trading_hours",
-                "passed": False,
-                "detail": f"장외 시간. 허용: {config.MARKET_OPEN_TIME}~{config.MARKET_CLOSE_TIME}",
-            }
-        )
-        passed = False
-    else:
-        checks.append(
-            {
-                "check": "trading_hours",
-                "passed": True,
-                "detail": current_t.strftime("%H:%M"),
-            }
-        )
-
-    # ── 2. 지수 폭락 체크 (-2.0% 등) ──────────────────────────────────────
+    # ── 1. 지수 폭락 체크 (-2.0% 등) ──────────────────────────────────────
     market_change: float = market_data.get("market_change", 0.0)
     market_name = config.MARKET.upper()
     if market_change <= config.MARKET_DROP_THRESHOLD:

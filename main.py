@@ -20,7 +20,7 @@ import logging
 import os
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, time
 from pathlib import Path
 from typing import Any
 
@@ -608,6 +608,11 @@ class DelphiTrader:
 
     async def run_cycle(self) -> None:
         now = datetime.now()
+        _open = time(*map(int, config.MARKET_OPEN_TIME.split(":")))
+        _close = time(*map(int, config.MARKET_CLOSE_TIME.split(":")))
+        if not (_open <= now.time() <= _close):
+            return
+
         try:
             snapshot = await self._collect_snapshot()
         except Exception as exc:
@@ -627,7 +632,6 @@ class DelphiTrader:
         self.risk.sync_daily_stats(total_assets)
 
         market_env = {
-            "current_time": snapshot.get("decision_current_time") or now,
             "market_change": snapshot["market_change"],
             "current_volume": int(price_data["volume"]),
             "circuit_breaker": False,
