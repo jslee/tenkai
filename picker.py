@@ -134,7 +134,6 @@ async def _build_period_charts(
     ticker: str,
     name: str,
     output_dir: Path,
-    plot_count: int,
 ) -> dict[str, Path] | None:
     """일봉/주봉/월봉 차트 PNG를 생성하고 {D/W/M: path} 를 반환한다.
     데이터를 가져오지 못하면 None을 반환한다.
@@ -166,9 +165,9 @@ async def _build_period_charts(
 
         candles_asc = list(reversed(candles))
         df = _build_period_indicator_frame(candles_asc, period_code)
-        if plot_count > 0:
-            df = df.tail(plot_count).reset_index(drop=True)
-            df["x"] = np.arange(len(df), dtype=float)
+        # if plot_count > 0:
+        #     df = df.tail(plot_count).reset_index(drop=True)
+        #     df["x"] = np.arange(len(df), dtype=float)
 
         ticker_dir = output_dir / ticker
         path = _render_period_chart(
@@ -343,9 +342,7 @@ async def _run(args: argparse.Namespace) -> None:
     for idx, (ticker, name) in enumerate(watchlist, 1):
         print(f"[{idx}/{len(watchlist)}] {ticker} {name} — 차트 생성 중...")
 
-        chart_paths = await _build_period_charts(
-            market, ticker, name, output_dir, args.count
-        )
+        chart_paths = await _build_period_charts(market, ticker, name, output_dir)
         if chart_paths is None:
             print(f"  ⚠ {ticker} 차트 생성 실패 — 건너뜀")
             continue
@@ -380,12 +377,6 @@ def _parse_args() -> argparse.Namespace:
         "--output-dir",
         default="charts/periods",
         help="차트 저장 디렉터리 (기본: charts/periods)",
-    )
-    parser.add_argument(
-        "--count",
-        type=int,
-        default=120,
-        help="차트에 표시할 최대 봉 수 (기본: 120)",
     )
     parser.add_argument(
         "--ticker",

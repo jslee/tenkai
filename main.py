@@ -6,9 +6,6 @@
 
 실행 예:
     python main_delphi.py --ticker 005930
-
-    테스트로 한번만 실행한 후 주기를 끝내고 종료
-    python main_delphi.py --ticker 005930 --once --real
 """
 
 from __future__ import annotations
@@ -92,21 +89,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--name",
         default=None,
-        help="종목명으로 종목 지정. 예: 삼성전자  (--ticker 대신 사용 가능)",
+        help="종목명으로 지정(--ticker 대신 사용)",
     )
     parser.add_argument("--real", action="store_true", help="실투자 모드")
     parser.add_argument("--debug", action="store_true", help="DEBUG 로그 출력")
-    parser.add_argument("--once", action="store_true", help="1회만 실행 후 종료")
-    parser.add_argument(
-        "--plot-count",
-        type=int,
-        default=int(_CHART_DEFAULTS["plot_count"]),
-        help="AI에 보낼 차트에 표시할 봉 수",
-    )
     parser.add_argument(
         "--output-dir",
         default=str(_CHART_DEFAULTS["output_dir"]),
-        help="생성 차트 저장 디렉터리",
+        help="차트 저장 디렉터리",
     )
     return parser.parse_args()
 
@@ -593,7 +583,7 @@ class DelphiTrader:
             },
         )
 
-    async def run(self, once: bool = False) -> None:
+    async def run(self) -> None:
         mode = "모의" if config.KIS_IS_PAPER else "실전"
         set_title(self.ticker, self.stock_name, mode=mode)
 
@@ -608,9 +598,6 @@ class DelphiTrader:
                     logger.debug("[Main] 주말/공휴일 — 사이클 생략")
                 else:
                     await self.run_cycle()
-
-                if once:
-                    break
 
                 await asyncio.sleep(DECISION_LOOP_INTERVAL_SEC)
         finally:
@@ -688,7 +675,7 @@ async def _async_main(args: argparse.Namespace) -> None:
     )
     await trader.initialize()
     try:
-        await trader.run(once=args.once)
+        await trader.run()
     finally:
         await trader.safe_exit_cleanup()
 

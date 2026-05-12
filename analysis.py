@@ -294,9 +294,7 @@ async def _run(args: argparse.Namespace) -> None:
         name = market.get_stock_name(ticker) or ticker
     print(f"\n{ticker} {name} — 차트 생성 중...")
 
-    chart_paths = await _build_period_charts(
-        market, ticker, name, output_dir, args.count
-    )
+    chart_paths = await _build_period_charts(market, ticker, name, output_dir)
     if chart_paths is None:
         print(f"오류: {ticker} 차트 생성 실패", file=sys.stderr)
         sys.exit(1)
@@ -322,12 +320,6 @@ def _parse_args() -> argparse.Namespace:
         "--output-dir",
         default="charts/periods",
         help="차트 저장 디렉터리 (기본: charts/periods)",
-    )
-    parser.add_argument(
-        "--count",
-        type=int,
-        default=120,
-        help="차트에 표시할 최대 봉 수 (기본: 120)",
     )
     parser.add_argument("--debug", action="store_true", help="DEBUG 로그 출력")
     return parser.parse_args()
