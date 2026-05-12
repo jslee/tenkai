@@ -3,6 +3,7 @@
 watchlist_stocks.csv (종목코드:종목명 형식)를 읽어 종목별로
 일봉/주봉/월봉 차트를 그린 뒤 AI에 분석을 요청하고,
 점수 높은 순으로 결과를 출력한다.
+매수할 종목을 선정하는 사전 작업으로 활용한다.
 
 실행 예:
     python picker.py
@@ -54,12 +55,16 @@ PICKER_PROMPT_TEMPLATE = """당신은 한국 주식 단기 스윙 트레이딩�
   * 차트에 포함된 지표: 캔들,볼린저밴드,RSI,거래량,MACD,EMA(5, 20, 60)
 
 [평가 원칙]
-1. 월봉 → 주봉 → 일봉 순으로 추세를 확인한다.
-2. 추세·모멘텀·거래량·지지저항·지표 수렴/발산을 종합하여 단기 매수 매력도를 0~100점으로 채점한다.
-3. 현재 가격이 중장기 이동평균선 대비 과열/침체 구간인지 판단한다.
-4. 매수 타이밍(즉시/눌림목 대기/돌파 대기/관망)을 한 가지로 명시한다.
-5. 반드시 웹 검색을 통해 이 종목의 최신 뉴스(실적, 공시, 테마 등)를 찾아 분석에 포함한다.
-6. 검색된 뉴스가 차트의 변동성이나 향후 방향성에 미칠 영향을 분석하여 최종 판단에 반영한다.
+1. 월봉 → 주봉 → 일봉 순으로 추세를 확인하되, 상위 차트의 추세와 일봉의 단기 움직임 사이의 괴리(Divergence)를 반드시 포착한다.
+2. 특히 최근 3~5거래일간의 일봉 패턴을 정밀 분석하여, 이것이 상승 추세 속의 '눌림목(Pullback)'인지 아니면 추세가 꺾이는 '추세 전환(Reversal)'인지를 명확히 판별한다.
+3. 하락 시 거래량의 변화를 확인하여 매수세의 이탈 여부를 판단한다 (거래량 없는 하락은 눌림목으로 간주).
+4. 현재 가격이 주요 지지선(EMA 20, 볼린저밴드 중심선 등)에 맞닿아 있는지 확인하여 '눌림목 대기' 또는 '돌파 대기'의 근거로 삼는다.
+5. 추세·모멘텀·거래량·지지저항·지표 수렴/발산을 종합하여 단기 매수 매력도를 0~100점으로 채점한다.
+6. 현재 가격이 중장기 이동평균선 대비 과열/침체 구간인지 판단한다.
+7. 매수 타이밍(즉시/눌림목 대기/돌파 대기/관망)을 한 가지로 명시한다.
+8. 현재 눌림목 구간인지, 돌파 직전인지, 관망할 때인지 명확하게 제시하고 판단 근거와 권고사항을 제시한다.
+9. 반드시 웹 검색을 통해 이 종목의 최신 뉴스(실적, 공시, 테마 등)를 찾아 분석에 포함한다.
+10. 검색된 뉴스가 차트의 변동성이나 향후 방향성에 미칠 영향을 분석하여 최종 판단에 반영한다.
 
 [출력 형식]
 반드시 아래 JSON 하나만 반환하라. 다른 설명은 생략한다.
@@ -68,7 +73,7 @@ PICKER_PROMPT_TEMPLATE = """당신은 한국 주식 단기 스윙 트레이딩�
     "score": 0~100,
     "timing": 즉시|눌림목 대기|돌파 대기|관망,
     "trend": 강한 상승|상승|횡보|하락|강한 하락,
-    "news": 검색된 뉴스의 핵심 내용과 차트와의 상관관계 요약(2~3문장),
+    "news": 검색된 뉴스의 핵심 내용과 차트와의 상관관계를 상세히 설명,
     "score-reason": 매수 매력도를 결정한 핵심 근거 한 문장,
     "timing-reason": 타이밍 판단 근거 및 타이밍에 대비하는 권고사항,
 }}"""
@@ -288,15 +293,19 @@ def _print_results(results: list[dict[str, Any]]) -> None:
 
 
 async def _run(args: argparse.Namespace) -> None:
-    csv_path = Path(args.csv)
-    if not csv_path.exists():
-        print(f"오류: 파일을 찾을 수 없습니다 — {csv_path}", file=sys.stderr)
-        sys.exit(1)
-
-    watchlist = _parse_watchlist(csv_path)
-    if not watchlist:
-        print("오류: watchlist가 비어 있습니다.", file=sys.stderr)
-        sys.exit(1)
+    # --ticker 지정 시 watchlist 없이 바로 실행
+    if args.ticker:
+        tickers = [t.strip() for t in args.ticker.split(",") if t.strip()]
+        watchlist = [(t, t) for t in tickers]
+    else:
+        csv_path = Path(args.csv)
+        if not csv_path.exists():
+            print(f"오류: 파일을 찾을 수 없습니다 — {csv_path}", file=sys.stderr)
+            sys.exit(1)
+        watchlist = _parse_watchlist(csv_path)
+        if not watchlist:
+            print("오류: watchlist가 비어 있습니다.", file=sys.stderr)
+            sys.exit(1)
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -352,6 +361,11 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=120,
         help="차트에 표시할 최대 봉 수 (기본: 120)",
+    )
+    parser.add_argument(
+        "--ticker",
+        default=None,
+        help="특정 종목만 실행 (쉼표로 복수 지정 가능). 예: 005930 또는 005930,000660",
     )
     parser.add_argument("--debug", action="store_true", help="DEBUG 로그 출력")
     return parser.parse_args()
