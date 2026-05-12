@@ -1,6 +1,6 @@
 # Tenkai — KIS API 기반 AI 자동매매 시스템
 
-LM Studio(OpenAI 호환 로컬 LLM)와 한국투자증권 KIS API를 연결하는 단일 종목 단기 자동매매 시스템.
+Local AI와 한국투자증권 KIS API를 연결하는 단일 종목 단기 자동매매 시스템.
 
 ---
 
@@ -34,6 +34,12 @@ ARBITER_MODEL=google/gemma-4-26b-a4b
 ---
 
 ## 실행 파일 개요
+
+- picker로 유망 종목을 선정한다.
+- analysis로 선정된 종목에 언제 들어갈지 파악한다.
+- analysis는 이미 보유중인 종목에 대한 대응 전략도 제공한다.
+- 종목 매수가 결정되면 main.py으로 자동매매한다.
+- 자동매매 중 게좌 모니터링은 status를 이용한다.
 
 | 파일 | 용도 |
 |---|---|
