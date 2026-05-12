@@ -293,8 +293,39 @@ def _print_results(results: list[dict[str, Any]]) -> None:
 
 
 async def _run(args: argparse.Namespace) -> None:
-    # --ticker 지정 시 watchlist 없이 바로 실행
-    if args.ticker:
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    market = _create_market()
+    await market._auth_data.get_token()
+
+    # watchlist 결정
+    if args.name:
+        matches = market.find_ticker_by_name(args.name)
+        if not matches:
+            print(
+                f"오류: '{args.name}' 에 해당하는 종목을 찾을 수 없습니다.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if len(matches) == 1:
+            ticker_code, ticker_name = matches[0]
+            print(f"  종목 확인: {ticker_name} ({ticker_code})")
+        else:
+            print(f"'{args.name}' 검색 결과 {len(matches)}건:")
+            for i, (code, nm) in enumerate(matches, 1):
+                print(f"  {i:>3}. {nm} ({code})")
+            try:
+                sel = int(input("선택 번호를 입력하세요: ").strip())
+                if not 1 <= sel <= len(matches):
+                    raise ValueError
+            except (ValueError, EOFError):
+                print("올바른 번호를 입력하세요.", file=sys.stderr)
+                sys.exit(1)
+            ticker_code, ticker_name = matches[sel - 1]
+        watchlist = [(ticker_code, ticker_name)]
+    elif args.ticker:
+        # --ticker 지정 시 watchlist 없이 바로 실행
         tickers = [t.strip() for t in args.ticker.split(",") if t.strip()]
         watchlist = [(t, t) for t in tickers]
     else:
@@ -306,12 +337,6 @@ async def _run(args: argparse.Namespace) -> None:
         if not watchlist:
             print("오류: watchlist가 비어 있습니다.", file=sys.stderr)
             sys.exit(1)
-
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    market = _create_market()
-    await market._auth_data.get_token()
 
     results: list[dict[str, Any]] = []
 
@@ -366,6 +391,11 @@ def _parse_args() -> argparse.Namespace:
         "--ticker",
         default=None,
         help="특정 종목만 실행 (쉼표로 복수 지정 가능). 예: 005930 또는 005930,000660",
+    )
+    parser.add_argument(
+        "--name",
+        default=None,
+        help="종목명으로 단일 종목 지정. 예: 삼성전자  (--ticker 대신 사용 가능)",
     )
     parser.add_argument("--debug", action="store_true", help="DEBUG 로그 출력")
     return parser.parse_args()

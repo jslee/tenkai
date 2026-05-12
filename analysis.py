@@ -5,6 +5,7 @@ picker.py가 다수 종목을 빠르게 스크리닝하는 용도라면,
 analysis.py는 특정 종목 한 개를 집중적으로 분석하는 용도이다.
 
 실행 예:
+    python analysis.py --name 삼성전자
     python analysis.py --ticker 005930
     python analysis.py --ticker 005930 --count 200 --output-dir charts/analysis
 """
@@ -80,6 +81,9 @@ ANALYSIS_PROMPT_TEMPLATE = """당신은 한국 주식 전문 애널리스트입�
 
 [출력 형식]
 반드시 아래 JSON 하나만 반환하라. 다른 설명은 생략한다.
+
+주의: 입력 데이터에 명시되지 않은 구체적인 가격이나 수치를 임의로 생성하지 않는다. 
+가격을 언급해야 할 경우, 'EMA 60선 부근' 또는 '직전 저점 수준'과 같이 차트상의 기술적 지표나 위치를 기준으로 설명하라.
 
 {{
     "score": 0~100,
@@ -255,14 +259,39 @@ def _print_report(ticker: str, name: str, r: dict[str, Any]) -> None:
 
 
 async def _run(args: argparse.Namespace) -> None:
-    ticker = args.ticker.strip()
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     market = _create_market()
     await market._auth_data.get_token()
 
-    name = market.get_stock_name(ticker) or ticker
+    # --name 으로 종목 역조회
+    if args.name:
+        matches = market.find_ticker_by_name(args.name)
+        if not matches:
+            print(
+                f"오류: '{args.name}' 에 해당하는 종목을 찾을 수 없습니다.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if len(matches) == 1:
+            ticker, name = matches[0]
+            print(f"  종목 확인: {name} ({ticker})")
+        else:
+            print(f"'{args.name}' 검색 결과 {len(matches)}건:")
+            for i, (code, nm) in enumerate(matches, 1):
+                print(f"  {i:>3}. {nm} ({code})")
+            try:
+                sel = int(input("선택 번호를 입력하세요: ").strip())
+                if not 1 <= sel <= len(matches):
+                    raise ValueError
+            except (ValueError, EOFError):
+                print("올바른 번호를 입력하세요.", file=sys.stderr)
+                sys.exit(1)
+            ticker, name = matches[sel - 1]
+    else:
+        ticker = args.ticker.strip()  # type: ignore[union-attr]
+        name = market.get_stock_name(ticker) or ticker
     print(f"\n{ticker} {name} — 차트 생성 중...")
 
     chart_paths = await _build_period_charts(
@@ -280,15 +309,19 @@ async def _run(args: argparse.Namespace) -> None:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="단일 종목 심층 분석 도구")
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
         "--ticker",
-        required=True,
         help="분석할 종목 코드. 예: 005930",
+    )
+    group.add_argument(
+        "--name",
+        help="분석할 종목명 키워드. 예: 삼성전자",
     )
     parser.add_argument(
         "--output-dir",
-        default="charts/analysis",
-        help="차트 저장 디렉터리 (기본: charts/analysis)",
+        default="charts/periods",
+        help="차트 저장 디렉터리 (기본: charts/periods)",
     )
     parser.add_argument(
         "--count",

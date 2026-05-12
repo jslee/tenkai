@@ -88,6 +88,36 @@ class KISMarket:
         logger.warning("[종목명 조회] 종목을 찾지 못함: %s", ticker)
         return ticker
 
+    def find_ticker_by_name(self, name: str) -> list[tuple[str, str]]:
+        """종목명(부분 일치)으로 종목코드를 역조회한다.
+
+        Args:
+            name: 검색할 종목명 키워드 (대소문자/공백 무관 부분 일치)
+
+        Returns:
+            [(코드, 종목명), ...] — 일치하는 종목 목록 (빈 리스트 = 미발견)
+        """
+        import config as _cfg
+
+        keyword = name.strip().lower()
+        results: list[tuple[str, str]] = []
+        base_dir = getattr(_cfg, "STOCK_CODE_DIR", ".")
+        for filename in ["kospi_code.mst", "kosdaq_code.mst"]:
+            path = Path(base_dir) / filename
+            if not path.exists():
+                continue
+            try:
+                with path.open("r", encoding="cp949") as f:
+                    for line in f:
+                        r = line[0 : len(line) - 228]
+                        code = r[0:9].rstrip()
+                        stock_name = r[21:].strip()
+                        if keyword in stock_name.lower():
+                            results.append((code, stock_name))
+            except Exception as e:
+                logger.warning("[종목명 역조회] 파일 읽기 실패 (%s): %s", path, e)
+        return results
+
     def is_etf(self, ticker: str) -> bool:
         """
         kospi_code.mst / kosdaq_code.mst 파일에서 종목의 ETF/ETN 여부를 조회한다.

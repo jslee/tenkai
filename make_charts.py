@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
 import math
 from datetime import datetime
 from pathlib import Path
@@ -139,6 +140,11 @@ from strategy.indicators import _ema, resample_candles
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="기술지표 차트를 PNG로 저장")
     parser.add_argument("--ticker", default=config.TICKER, help="종목 코드")
+    parser.add_argument(
+        "--name",
+        default=None,
+        help="종목명으로 종목 지정. 예: 삼성전자  (--ticker 대신 사용 가능)",
+    )
     parser.add_argument(
         "--output-dir",
         default=chart_config.DEFAULT_OUTPUT_DIR,
@@ -582,6 +588,31 @@ async def _run() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     market = _create_market_client()
+
+    if args.name:
+        matches = market.find_ticker_by_name(args.name)
+        if not matches:
+            print(
+                f"오류: '{args.name}' 에 해당하는 종목을 찾을 수 없습니다.",
+                file=sys.stderr,
+            )
+            return
+        if len(matches) == 1:
+            args.ticker = matches[0][0]
+            print(f"  종목 확인: {matches[0][1]} ({matches[0][0]})")
+        else:
+            print(f"'{args.name}' 검색 결과 {len(matches)}건:")
+            for i, (code, nm) in enumerate(matches, 1):
+                print(f"  {i:>3}. {nm} ({code})")
+            try:
+                sel = int(input("선택 번호를 입력하세요: ").strip())
+                if not 1 <= sel <= len(matches):
+                    raise ValueError
+            except (ValueError, EOFError):
+                print("올바른 번호를 입력하세요.", file=sys.stderr)
+                return
+            args.ticker = matches[sel - 1][0]
+
     stock_name = market.get_stock_name(args.ticker)
 
     # ── 분봉 차트 ──────────────────────────────────────────────────────────

@@ -89,6 +89,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--ticker", type=str, default=config.TICKER, help="거래 종목 코드"
     )
+    parser.add_argument(
+        "--name",
+        default=None,
+        help="종목명으로 종목 지정. 예: 삼성전자  (--ticker 대신 사용 가능)",
+    )
     parser.add_argument("--real", action="store_true", help="실투자 모드")
     parser.add_argument("--debug", action="store_true", help="DEBUG 로그 출력")
     parser.add_argument("--once", action="store_true", help="1회만 실행 후 종료")
@@ -645,6 +650,35 @@ class DelphiTrader:
 
 
 async def _async_main(args: argparse.Namespace) -> None:
+    if args.name:
+        _auth = KISAuth(
+            app_key=config.KIS_REAL_APP_KEY,
+            app_secret=config.KIS_REAL_APP_SECRET,
+            account_no=config.KIS_REAL_ACCOUNT_NO,
+            base_url=config.BASE_URL_REAL,
+            is_paper=False,
+        )
+        _mkt = KISMarket(auth_data=_auth, auth_trade=_auth)
+        matches = _mkt.find_ticker_by_name(args.name)
+        if not matches:
+            logger.error("'%s' 에 해당하는 종목을 찾을 수 없습니다.", args.name)
+            return
+        if len(matches) == 1:
+            args.ticker = matches[0][0]
+            logger.info("종목 확인: %s (%s)", matches[0][1], matches[0][0])
+        else:
+            print(f"'{args.name}' 검색 결과 {len(matches)}건:")
+            for i, (code, nm) in enumerate(matches, 1):
+                print(f"  {i:>3}. {nm} ({code})")
+            try:
+                sel = int(input("선택 번호를 입력하세요: ").strip())
+                if not 1 <= sel <= len(matches):
+                    raise ValueError
+            except (ValueError, EOFError):
+                print("올바른 번호를 입력하세요.", file=sys.stderr)
+                return
+            args.ticker = matches[sel - 1][0]
+
     if args.real:
         config.KIS_IS_PAPER = False
         logger.warning("실투자 모드로 실행합니다.")
