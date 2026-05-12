@@ -252,8 +252,13 @@ class KISMarket:
         from datetime import datetime, timedelta
 
         url = f"{self._auth_data.base_url}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
-        # start_date는 충분히 과거로 고정 (KIS는 이 값을 하한으로만 사용)
-        start_date = (datetime.now() - timedelta(days=count * 4)).strftime("%Y%m%d")
+        # period_code별로 봉 1개당 달력 일수가 다르므로 lookback을 맞춰 계산한다.
+        # 일봉: ~1.4일/봉 (주 5거래일) → ×2 여유
+        # 주봉: 7일/봉 → ×8 여유
+        # 월봉: ~30일/봉 → ×35 여유
+        _days_per_candle = {"D": 2, "W": 8, "M": 35}
+        lookback_days = count * _days_per_candle.get(period_code, 4)
+        start_date = (datetime.now() - timedelta(days=lookback_days)).strftime("%Y%m%d")
         end_date = datetime.now().strftime("%Y%m%d")
 
         candles: list[dict[str, Any]] = []
