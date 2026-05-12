@@ -138,12 +138,10 @@ class DelphiTrader:
     def __init__(
         self,
         ticker: str,
-        plot_count: int,
         output_dir: Path,
     ) -> None:
         self.ticker = ticker
         self.intervals = DECISION_INTERVALS
-        self.plot_count = plot_count
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -346,8 +344,8 @@ class DelphiTrader:
             )
 
             df = _build_indicator_frame(candles_asc) if candles_asc else None
-            if df is not None and self.plot_count > 0:
-                df = df.tail(self.plot_count).reset_index(drop=True)
+            if df is not None:
+                df = df.tail(int(_CHART_DEFAULTS["plot_count"])).reset_index(drop=True)
                 df["x"] = np.arange(len(df), dtype=float)
 
             interval_snapshots[interval] = {
@@ -670,9 +668,7 @@ async def _async_main(args: argparse.Namespace) -> None:
         config.KIS_IS_PAPER = False
         logger.warning("실투자 모드로 실행합니다.")
 
-    trader = DelphiTrader(
-        ticker=args.ticker, plot_count=args.plot_count, output_dir=Path(args.output_dir)
-    )
+    trader = DelphiTrader(ticker=args.ticker, output_dir=Path(args.output_dir))
     await trader.initialize()
     try:
         await trader.run()
