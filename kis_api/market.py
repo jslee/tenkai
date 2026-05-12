@@ -244,6 +244,8 @@ class KISMarket:
         내려준다. 필요한 봉 수(count)를 채울 때까지 FID_INPUT_DATE_2를 이전 페이지의
         가장 오래된 날짜 하루 전으로 당기며 반복 호출한다.
 
+        KIS API는 조회 가능한 과거 데이터 깊이가 약 3~5년으로 제한되어 있다.
+
         Args:
             ticker:      종목코드
             period_code: "D" (일봉) | "W" (주봉) | "M" (월봉)
