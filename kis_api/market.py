@@ -3,7 +3,8 @@ kis_api/market.py — 시세/호가 조회
 
 사용 API:
 - FHKST01010100: 현재가·등락률·거래량
-- FHKST03010200: 1분봉 OHLCV
+- FHKST03010230: 1분봉 OHLCV 전체 fetch (주식일별분봉조회, 날짜 지정, 최대 120봉/페이지)
+- FHKST03010200: 1분봉 최신 페이지 증분 갱신 (당일분봉, 최대 30봉/페이지)
 - FHKST01010200: 매수·매도 10호가 잔량
 """
 
@@ -337,12 +338,12 @@ class KISMarket:
         return await self._fetch_period_candles(ticker, "D", days)
 
     async def get_weekly_candles(
-        self, ticker: str, weeks: int = 100
+        self, ticker: str, weeks: int = 200
     ) -> list[dict[str, Any]]:
         """
         최근 N 주의 주봉 OHLCV를 조회한다.
 
-        기본값 100봉: 약 2년치. EMA(60) 안정화 포함 지표 계산에 충분.
+        기본값 200봉: 약 4년치.
         date 필드는 해당 주의 마지막 거래일(금요일) 기준이다.
 
         Returns:
@@ -353,12 +354,12 @@ class KISMarket:
         return await self._fetch_period_candles(ticker, "W", weeks)
 
     async def get_monthly_candles(
-        self, ticker: str, months: int = 60
+        self, ticker: str, months: int = 200
     ) -> list[dict[str, Any]]:
         """
         최근 N 개월의 월봉 OHLCV를 조회한다.
 
-        기본값 60봉: 약 5년치. EMA(60) 안정화 포함 장기 지표 계산에 충분.
+        기본값 200봉: 시도하지만 200개 모두를 가져오지 못한다. EMA(60) 미완성
         date 필드는 해당 월의 마지막 거래일 기준이다.
 
         Returns:
@@ -410,6 +411,10 @@ class KISMarket:
 
             prev_time_val = curr_time_val
 
+            # open==0: FHKST03010200 전일 소급 시 채워지는 가짜 보정 봉 제거
+            if int(c.get("stck_oprc", 0)) == 0:
+                continue
+
             candles.append(
                 {
                     "timestamp": f"{current_date_str}{time_str}",
@@ -421,6 +426,42 @@ class KISMarket:
                 }
             )
         return candles, current_date_str, prev_time_val
+
+    @staticmethod
+    def _parse_daily_chart_page(
+        raw_candles: list[dict],
+    ) -> list[dict[str, Any]]:
+        """FHKST03010230 output2 한 페이지를 파싱한다.
+
+        FHKST03010230은 날짜별 역사적 분봉 API로 stck_bsop_date가 각 봉에 정확히
+        제공되므로 FHKST03010200의 날짜 복사 버그 보정 로직이 불필요하다.
+
+        Args:
+            raw_candles: API output2 리스트 (최신→과거 순)
+
+        Returns:
+            파싱된 봉 리스트
+        """
+        candles: list[dict[str, Any]] = []
+        for c in raw_candles:
+            time_str = c.get("stck_cntg_hour", "")
+            date_str = c.get("stck_bsop_date", "")
+            if not time_str or not date_str:
+                continue
+            open_price = int(c.get("stck_oprc", 0))
+            if open_price == 0:  # 허봉 방어
+                continue
+            candles.append(
+                {
+                    "timestamp": f"{date_str}{time_str}",
+                    "open": open_price,
+                    "high": int(c.get("stck_hgpr", 0)),
+                    "low": int(c.get("stck_lwpr", 0)),
+                    "close": int(c.get("stck_prpr", 0)),
+                    "volume": int(c.get("cntg_vol", 0)),
+                }
+            )
+        return candles
 
     async def _get_minute_page_raw(
         self,
@@ -458,40 +499,94 @@ class KISMarket:
         raw = data.get("output2")
         return raw if isinstance(raw, list) else []
 
+    async def _get_daily_chart_page_raw(
+        self,
+        session: aiohttp.ClientSession,
+        headers: dict,
+        ticker: str,
+        date_str: str,
+        hour_str: str,
+    ) -> list[dict] | None:
+        """FHKST03010230 단일 페이지 HTTP 요청.
+
+        date_str 날짜의 hour_str 시각 기준으로 과거 방향으로 최대 120봉을 반환한다.
+        500 에러 시 None(중단 신호), 데이터 없으면 [].
+        """
+        url = f"{self._auth_data.base_url}/uapi/domestic-stock/v1/quotations/inquire-time-dailychartprice"
+        params = {
+            "fid_cond_mrkt_div_code": "J",
+            "fid_input_iscd": ticker,
+            "fid_input_hour_1": hour_str,
+            "fid_input_date_1": date_str,
+            "fid_pw_data_incu_yn": "Y",
+            "fid_fake_tick_incu_yn": "",
+        }
+        try:
+            async with session.get(
+                url,
+                headers=headers,
+                params=params,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status >= 500:
+                    logger.warning(
+                        "[일별분봉 조회] KIS 서버 에러(HTTP %d), 조회 중단", resp.status
+                    )
+                    return None
+                resp.raise_for_status()
+                data = await resp.json()
+        except aiohttp.ClientResponseError:
+            raise
+
+        raw = data.get("output2")
+        return raw if isinstance(raw, list) else []
+
     async def _fetch_all_minute_candles(
         self, ticker: str, count: int
     ) -> list[dict[str, Any]]:
-        """1분봉 전체 페이지네이션 fetch (캐시 미스 시 호출)."""
+        """1분봉 전체 페이지네이션 fetch — FHKST03010230(주식일별분봉조회) 사용.
+
+        FHKST03010200(당일분봉)과 달리 날짜 지정 조회를 지원하며 페이지당 최대 120봉,
+        최대 1년치 실제 분봉을 반환한다. 전일 소급 시 0으로 채우는 문제 없음.
+        """
+        from datetime import datetime, timedelta
+
         all_candles: list[dict[str, Any]] = []
+        seen_ts: set[str] = set()
+        next_date = datetime.now().strftime("%Y%m%d")
         next_hour = "000000"
-        current_date_str = ""
-        prev_time_val = -1
+        empty_streak = 0  # 연속 빈 응답 카운터 (공휴일·주말 스킵용)
 
         try:
             await self._auth_data.get_token()
-            headers = self._auth_data.get_headers("FHKST03010200")
+            headers = self._auth_data.get_headers("FHKST03010230")
             async with aiohttp.ClientSession() as session:
                 while len(all_candles) < count:
-                    raw_candles = await self._get_minute_page_raw(
-                        session, headers, ticker, next_hour
+                    raw_candles = await self._get_daily_chart_page_raw(
+                        session, headers, ticker, next_date, next_hour
                     )
                     if raw_candles is None:  # 500 서버 에러 — 중단
                         break
-                    if not raw_candles:  # 빈 리스트 — 더 이상 데이터 없음
-                        break
 
-                    page_candles, current_date_str, prev_time_val = (
-                        self._parse_raw_candle_page(
-                            raw_candles, current_date_str, prev_time_val
+                    if not raw_candles:
+                        # 빈 응답 — 공휴일·주말이거나 해당 날짜 데이터 끝
+                        empty_streak += 1
+                        if empty_streak >= 10:
+                            break
+                        prev_day = datetime.strptime(next_date, "%Y%m%d") - timedelta(
+                            days=1
                         )
-                    )
+                        next_date = prev_day.strftime("%Y%m%d")
+                        next_hour = "160000"  # 전일 장 마감 후 시각으로 재시도
+                        continue
+
+                    empty_streak = 0
+                    page_candles = self._parse_daily_chart_page(raw_candles)
                     for candle in page_candles:
-                        # 페이징 경계에서 같은 시각 봉이 중복 전달될 수 있음
-                        if (
-                            all_candles
-                            and all_candles[-1]["timestamp"] == candle["timestamp"]
-                        ):
+                        ts = candle["timestamp"]
+                        if ts in seen_ts:
                             continue
+                        seen_ts.add(ts)
                         all_candles.append(candle)
                         if len(all_candles) >= count:
                             break
@@ -499,24 +594,46 @@ class KISMarket:
                     if len(all_candles) >= count:
                         break
 
-                    oldest_time = raw_candles[-1].get("stck_cntg_hour", "")
-                    next_page_hour = self._page_before_time(oldest_time)
-                    if not oldest_time or next_page_hour == next_hour:
-                        # 더 이상 과거 데이터가 없거나 무한 루프 갇힘 방지
+                    # 다음 페이지 커서: 가장 오래된 봉의 날짜+시간 기준으로 이동
+                    oldest = raw_candles[-1]
+                    oldest_date = oldest.get("stck_bsop_date", next_date)
+                    oldest_time = oldest.get("stck_cntg_hour", "")
+                    if not oldest_time:
                         break
-                    next_hour = next_page_hour
 
-                    # KIS OpenAPI 초당 호출 제한(20건) 배려 — 부팅 시 한 번만 실행되므로 0.3초
+                    next_page_hour = self._page_before_time(oldest_time)
+                    if next_page_hour == oldest_time:
+                        # 시간이 더 이상 줄어들지 않음 — 무한 루프 방지
+                        break
+
+                    # 장 시작(09:00) 이전으로 가면 전일 마감 시간으로 이동
+                    if int(next_page_hour) < 90000:
+                        prev_day = datetime.strptime(oldest_date, "%Y%m%d") - timedelta(
+                            days=1
+                        )
+                        next_date = prev_day.strftime("%Y%m%d")
+                        next_hour = "160000"
+                    else:
+                        next_date = oldest_date
+                        next_hour = next_page_hour
+
+                    # KIS OpenAPI 초당 호출 제한 배려
                     await asyncio.sleep(0.3)
 
+            logger.debug(
+                "[일별분봉 조회] %s: %d봉 수집 (요청 %d)",
+                ticker,
+                len(all_candles),
+                count,
+            )
             return all_candles
 
         except aiohttp.ClientError as e:
-            logger.error("[1분봉 조회] API 오류 (ticker=%s): %s", ticker, e)
+            logger.error("[일별분봉 조회] API 오류 (ticker=%s): %s", ticker, e)
             raise
         except (KeyError, ValueError, TypeError) as e:
             logger.error(
-                "[1분봉 조회] 응답 파싱 오류 (ticker=%s): %s: %s",
+                "[일별분봉 조회] 응답 파싱 오류 (ticker=%s): %s: %s",
                 ticker,
                 type(e).__name__,
                 e,

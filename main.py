@@ -483,16 +483,16 @@ class DelphiTrader:
         analysis = decision.get("analysis", {})
         analysis_str = (
             (
-                f"\n  - Trend: {analysis.get('trend', 'N/A')}"
-                f"\n  - Momentum: {analysis.get('momentum', 'N/A')}"
-                f"\n  - Orderbook: {analysis.get('orderbook', 'N/A')}"
+                f"\n  - Trend: {analysis.get('trend_context', 'N/A')}"
+                f"\n  - Entry Trigger: {analysis.get('entry_trigger', 'N/A')}"
+                f"\n  - Orderbook Strength: {analysis.get('orderbook_strength', 'N/A')}"
             )
             if analysis
             else ""
         )
 
         logger.info(
-            "[Cycle] %s: %s\nConfidence: %d\n%s",
+            "[Cycle] %s: %s\nConfidence: %d%s",
             ai_action,
             ai_reason,
             ai_confidence,
@@ -500,7 +500,7 @@ class DelphiTrader:
         )
 
         if ai_action == "BUY":
-            can_enter, enter_reason = self.risk.can_enter()
+            can_enter, enter_reason = self.risk.can_enter(current_price, total_assets)
             if not can_enter:
                 logger.info("[Cycle] BUY 진입 불가: %s", enter_reason)
             else:
@@ -522,7 +522,7 @@ class DelphiTrader:
                         logger.info("[Cycle] BUY 수량 부족")
                     else:
                         await self.order.buy_market(self.ticker, qty)
-                        self.risk.open_position(
+                        self.risk.add_position(
                             ticker=self.ticker,
                             direction="BUY",
                             entry_price=current_price,

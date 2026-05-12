@@ -14,7 +14,6 @@ import aiohttp
 import numpy as np
 
 import config
-from make_charts import _build_indicator_frame, _render_interval_chart
 
 if TYPE_CHECKING:
     from strategy.risk import RiskManager
@@ -129,6 +128,8 @@ class Arbiter:
         self, interval_snapshots: dict[int, dict[str, Any]]
     ) -> dict[int, Path]:
         """각 interval 차트 PNG를 생성하고 경로를 반환한다."""
+        from make_charts import _render_interval_chart  # 순환 임포트 방지
+
         chart_paths: dict[int, Path] = {}
         now = datetime.now()
         timestamp = now.strftime("%Y%m%d%H%M%S")
@@ -195,32 +196,38 @@ class Arbiter:
 {position_text}
 
 [분석 및 판단 원칙 - 반드시 준수할 것]
-1. 상위 타임프레임 우선의 원칙 (Top-Down Approach):
-   - 5분봉의 추세(Trend)를 '전략적 방향'으로 삼고, 1분/3분봉은 '진입 타이밍'을 결정하는 용도로 사용한다.
-   - 만약 5분봉의 방향과 1분봉의 신호가 충돌할 경우, 반드시 'HOLD'를 선택하여 리스크를 관리한다.
-2. 데이터 교차 검증 (Cross-Verification):
+1. 전략적 이원화 (Two-Way Strategy):
+   - [전략 A: 추세 추종 (Trend Following)] 5분봉이 상승 중일 때, 1/3분봉의 일시적 눌림목(RSI 저점, 볼린저밴드 하단 터치)에서 BUY를 결정한다.
+   - [전략 B: 역추세 반등 (Mean Reversion)] 5분봉이 하락 중이라도, 1분봉에서 강력한 수급 유입(거래량 급증 + MACD 골든크로스)과 함께 바닥권 신호가 포착되면 단기 반등을 노린 BUY를 결정한다.
+2. 타임프레임의 역할 분담 (Context vs Trigger):
+   - 5분봉은 '시장의 배경(Context)'이다. (상승장인가, 하락장인가?)
+   - 1분/3분봉은 '실행 트리거(Trigger)'이다. 5분봉의 방향성과 일시적으로 반대되는 흐름이 나타날 때, 이를 '리스크'가 아닌 '진입 기회'로 포착하라. 
+   - 단, 5분봉의 추세가 완전히 파괴된 상태에서의 무모한 물타기는 금지한다.
+3. 데이터 교차 검증 (Cross-Verification):
    - 차트의 기술적 지표(EMA, MACD, 볼린저밴드 등)와 호가창의 수급(매도/매수 잔량비율, 체결강도)이 일치할 때만 강력한 신호로 간주한다.
    - 예: 가격은 상승 중이나 매도호가 잔량이 압도적으로 많고 체결강도가 급락 중이라면 'SELL' 혹은 'HOLD'를 고려한다.
-3. 액션(BUY/SELL/HOLD) 판단 기준 및 엄격성:
+4. 액션(BUY/SELL/HOLD) 판단 기준 및 엄격성:
    - BUY: 상승/반등 진입이 유리하다고 확신할 때만 선택
    - SELL: 하락 전환 또는 보유 포지션 청산이 유리하다고 확신할 때 선택
    - HOLD: 불확실하거나 방향성이 모호하면 무조건 관망(HOLD)한다.
-4. 보유 정보를 제공하는 목적은 '매수/매도 전략'을 정교화하기 위함이지, 손실 중인 종목을 무조건 유지하라는 뜻이 아닙니다. 차트의 기술적 신호가 파괴되었다면, 매수가와 관계없이 냉정하게 SELL을 결정하세요.
+5. 종목 보유 정보의 제공:
+   - 종목의 보유 현황을 고려해 정교한 '매수/매도 전략'을 수립한다. 
+   - 차트의 기술적 신호가 파괴되었다면, 매수가와 관계없이 냉정하게 SELL을 결정하라.
 
 [출력 형식]
 반드시 아래 구조의 JSON 객체 하나만 반환하십시오. 다른 설명은 생략합니다.
 
 {{
     "action": "BUY" | "SELL" | "HOLD",
-    "confidence": 0~100, // 판단에 대한 확신도를 숫자로 표현 (80 이상이면 강력한 신호)
+    "strategy_type": "Trend-Following" | "Mean-Reversion" | "None", 
+    "confidence": 0~100,
     "analysis": {{
-        "trend": "5분봉 기준의 현재 추세 상태 (상승/하락/횡보)",
-        "momentum": "MACD 및 RSI를 통한 에너지 상태 (강화/약화/중립)",
-        "orderbook": "호가창과 체결강도가 차트 신호를 뒷받침하는지 여부"
+        "trend_context": "5분봉 기준 시장의 배경 (상승/하락/횡보)",
+        "entry_trigger": "1/3분봉에서 발견된 진입 신호 (눌림목/돌파/반등 등)",
+        "orderbook_strength": "체결강도 및 호가 수급의 유효성"
     }},
     "reason": "최종 결정을 내린 핵심적인 근거 한 문장"
-}}
-""".strip()
+}}""".strip()
 
     # ── LM Studio 호출 ──────────────────────────────────────────────────────
 
