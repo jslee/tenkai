@@ -2,7 +2,7 @@
 
 from .arbiter import Arbiter, normalize_action
 from .indicators import compute_all_indicators
-from .risk import RiskManager, Position, DailyStats, TradeRecord, check_fee_viability
+from .risk import RiskManager, Position, DailyStats, TradeRecord
 
 __all__ = [
     "Arbiter",
@@ -12,5 +12,4 @@ __all__ = [
     "Position",
     "DailyStats",
     "TradeRecord",
-    "check_fee_viability",
 ]

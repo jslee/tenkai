@@ -47,7 +47,6 @@ from make_charts import (
 from strategy import (
     Arbiter,
     RiskManager,
-    check_fee_viability,
     compute_all_indicators,
     normalize_action,
 )
@@ -505,42 +504,35 @@ class DelphiTrader:
                 logger.info("[Cycle] BUY 진입 불가: %s", enter_reason)
             else:
                 indicators = snapshot["indicators"]
-                fee_viable, fee_reason = check_fee_viability(
-                    current_price=float(current_price),
+                order_params = self.risk.calc_order_params(
+                    current_price=current_price,
+                    total_assets=total_assets,
                     atr=float(indicators.get("atr", 0.0)),
                 )
-                if not fee_viable:
-                    logger.info("[Cycle] BUY 수수료 필터 차단: %s", fee_reason)
+                qty = int(order_params["qty"])
+                if qty < 1:
+                    logger.info("[Cycle] BUY 수량 부족")
                 else:
-                    order_params = self.risk.calc_order_params(
-                        current_price=current_price,
-                        total_assets=total_assets,
-                        atr=float(indicators.get("atr", 0.0)),
+                    await self.order.buy_market(self.ticker, qty)
+                    self.risk.add_position(
+                        ticker=self.ticker,
+                        direction="BUY",
+                        entry_price=current_price,
+                        qty=qty,
+                        stop_loss=order_params["stop_loss"],
+                        take_profit=order_params["take_profit"],
                     )
-                    qty = int(order_params["qty"])
-                    if qty < 1:
-                        logger.info("[Cycle] BUY 수량 부족")
-                    else:
-                        await self.order.buy_market(self.ticker, qty)
-                        self.risk.add_position(
-                            ticker=self.ticker,
-                            direction="BUY",
-                            entry_price=current_price,
-                            qty=qty,
-                            stop_loss=order_params["stop_loss"],
-                            take_profit=order_params["take_profit"],
-                        )
-                        executed_action = "BUY"
-                        order_price = current_price
-                        order_qty = qty
-                        stop_loss = float(order_params["stop_loss"])
-                        take_profit = float(order_params["take_profit"])
-                        logger.info(
-                            "[Cycle] BUY 실행: %s %d주 @ %d",
-                            self.ticker,
-                            qty,
-                            current_price,
-                        )
+                    executed_action = "BUY"
+                    order_price = current_price
+                    order_qty = qty
+                    stop_loss = float(order_params["stop_loss"])
+                    take_profit = float(order_params["take_profit"])
+                    logger.info(
+                        "[Cycle] BUY 실행: %s %d주 @ %d",
+                        self.ticker,
+                        qty,
+                        current_price,
+                    )
         elif ai_action == "SELL":
             pos = self.risk.position
             if pos is None:

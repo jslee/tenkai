@@ -35,55 +35,6 @@ logger = logging.getLogger(__name__)
 _MARKET_CLOSE_TIME = time(*map(int, config.MARKET_CLOSE_TIME.split(":")))
 
 
-def _get_round_trip_fee_ratio() -> float:
-    """라운드트립 수수료율 (매수 브로커 + 매도 브로커 + 거래세)"""
-    return config.BROKER_FEE_RATE * 2 + config.TRANSACTION_TAX_RATE
-
-
-def check_fee_viability(current_price: float, atr: float) -> tuple[bool, str]:
-    """ATR 기반 수수료 손익분기점 필터.
-
-    ATR × ATR_TP_MULTIPLIER(예상 익절 이동폭)가
-    라운드트립 수수료 × MIN_PROFIT_BUFFER 이상이어야 진입을 허용한다.
-
-    낮은 변동성(ATR 소) 구간에서 진입하면 익절 달성해도 수수료에 잠식되므로,
-    기대 수익이 수수료보다 의미 있게 클 때만 진입한다.
-
-    Args:
-        current_price: 현재가 (원)
-        atr: ATR 값. 0이면 항상 기각.
-
-    Returns:
-        (viable: bool, reason: str)
-
-    예)
-        current_price=93_465, atr=50
-        손익분기점 = 93_465 × 0.0023 = 215원
-        예상 익절폭 = 50 × 4 = 200원  →  200 < 215 × 1.5 = 322.5  → 기각
-    """
-    if atr <= 0:
-        return False, "ATR=0 (변동성 데이터 없음 — 진입 불가)"
-
-    # 절대 금액 기준 계산 (원)
-    breakeven_move: float = current_price * _get_round_trip_fee_ratio()
-    required_move: float = breakeven_move * config.MIN_PROFIT_BUFFER
-    expected_profit: float = atr * config.ATR_TP_MULTIPLIER
-
-    if expected_profit < required_move:
-        return False, (
-            f"수수료분기미달: 예상익절={expected_profit:.1f}원 "
-            f"< 필요={required_move:.1f}원 "
-            f"(수수료={breakeven_move:.1f}원 × {config.MIN_PROFIT_BUFFER}배) "
-            f"[ATR={atr:.1f}]"
-        )
-
-    return True, (
-        f"수수료분기통과: 예상익절={expected_profit:.1f}원 "
-        f">= 필요={required_move:.1f}원 "
-        f"[ATR={atr:.1f}]"
-    )
-
-
 @dataclass
 class TradeRecord:
     """

@@ -14,6 +14,7 @@ import aiohttp
 import numpy as np
 
 import config
+from kis_api.market import KISMarket
 
 if TYPE_CHECKING:
     from strategy.risk import RiskManager
@@ -178,6 +179,11 @@ class Arbiter:
             f"호가 잔량비율: {orderbook.get('buy_ratio', 0.5):.1%}"
         )
 
+        # 제세금 및 수수료를 계산한다. ETF는 0.
+        cost_ratio = (
+            config.BROKER_FEE_RATE * 2 + config.TRANSACTION_TAX_RATE
+        )  # 매수+매도 수수료 + 거래세
+
         return f"""
 당신은 한국 주식 초단기 트레이딩을 수행하는 전문적인 '퀀트 트레이딩 에이전트'입니다.
 목표: 제공된 멀티 타임프레임 차트와 호가 데이터를 분석하여 즉각적인 매매 의사결정을 내립니다.
@@ -194,6 +200,9 @@ class Arbiter:
 
 [현재 보유 포지션]
 {position_text}
+
+[제세금 및 수수료]
+{int(cost_ratio)}%
 
 [분석 및 판단 원칙 - 반드시 준수할 것]
 1. 전략적 이원화 (Two-Way Strategy):
@@ -213,6 +222,8 @@ class Arbiter:
 5. 종목 보유 정보의 제공:
    - 종목의 보유 현황을 고려해 정교한 '매수/매도 전략'을 수립한다. 
    - 차트의 기술적 신호가 파괴되었다면, 매수가와 관계없이 냉정하게 SELL을 결정하라.
+6. 제세금 및 수수료:
+   - 매매 시 발생하는 제세금과 수수료를 고려해, 실제 수익이 예상되는 경우에만 BUY/SELL을 결정하라. 
 
 [출력 형식]
 반드시 아래 구조의 JSON 객체 하나만 반환하십시오. 다른 설명은 생략합니다.
