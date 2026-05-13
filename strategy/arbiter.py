@@ -136,20 +136,19 @@ class Arbiter:
         timestamp = now.strftime("%Y%m%d%H%M%S")
         for interval in self.intervals:
             frame = interval_snapshots[interval]["chart_frame"]
+            ticker_dir = self.output_dir / self.ticker
             _render_interval_chart(
                 frame,
                 self.ticker,
                 self.stock_name,
                 interval,
-                self.output_dir,
+                ticker_dir,
                 timestamp=timestamp,
             )
             day = now.strftime("%Y%m%d")
             hour = now.strftime("%H")
-            hhmm = now.strftime("%H%M")
-            chart_paths[interval] = (
-                self.output_dir / day / hour / f"{hhmm}_{interval}m.png"
-            )
+            mm = now.strftime("%H%M")
+            chart_paths[interval] = ticker_dir / day / hour / f"{mm}_{interval}m.png"
         return chart_paths
 
     # ── 프롬프트 생성 ───────────────────────────────────────────────────────
