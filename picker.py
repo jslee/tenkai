@@ -209,7 +209,7 @@ async def _build_period_charts(
 # ── LM Studio 호출 ───────────────────────────────────────────────────────────
 
 
-async def _ask_lm_studio(
+async def _ask_to_picker(
     ticker: str,
     name: str,
     chart_paths: dict[str, Path],
@@ -374,7 +374,7 @@ async def _run(args: argparse.Namespace) -> None:
             continue
 
         print(f"  → 분석 요청...")
-        decision = await _ask_lm_studio(ticker, name, chart_paths)
+        decision = await _ask_to_picker(ticker, name, chart_paths)
         decision["ticker"] = ticker
         decision["name"] = name
         results.append(decision)

@@ -104,20 +104,10 @@ EMA_TREND: int = int(os.environ.get("EMA_TREND", "60"))
 # 예) CANDLE_INTERVAL=1 → 5분봉, CANDLE_INTERVAL=3 → 15분봉.
 HTF_MULTIPLIER: int = int(os.environ.get("HTF_MULTIPLIER", "5"))
 
-# 수수료 손익분기점 버퍼 배수.
-# TP가 = 진입가 + (ATR × ATR_TP_MULTIPLIER) 로 정의되므로,
-# TP 거리(= TP가 - 진입가) = ATR × ATR_TP_MULTIPLIER 와 같음.
-# 이 TP 거리가 라운드트립 수수료(0.23%)의 N배 이상일 때만 BUY 진입을 허용.
-# 즉, ATR이 작아 TP가 가까울수록 "TP를 정확히 맞혀도 수수료조차 못 건지는"
-# 저변동성 구간을 걸러낸다. arbiter 호출 전에 먼저 체크해 LLM 비용도 절감.
-# 예) 1.5 → TP 거리가 수수료 × 1.5 = 0.345% 이상일 때만 진입.
-MIN_PROFIT_BUFFER: float = float(os.environ.get("MIN_PROFIT_BUFFER", "1.5"))
-
-
 # ── 리스크 관리 ──────────────────────────────────────
 # 스톱로스 후 재진입 쿨다운 시간 (분). 손절 발생 후 이 시간이 경과할 때까지 신규 진입을 차단한다.
 STOP_LOSS_COOLDOWN_MINUTES: int = int(
-    os.environ.get("STOP_LOSS_COOLDOWN_MINUTES", "10")
+    os.environ.get("STOP_LOSS_COOLDOWN_MINUTES", "20")
 )
 
 # ── 속도 기반 긴급 손절 (Flash Crash 대응) ───────────────

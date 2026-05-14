@@ -382,7 +382,36 @@ API 사용을 위한 등록페이지:
 ```
 
 ### conda 환경에서 사용
-``` bash
-> conda env config vars set NAVER_CLIENT_ID=...
-> conda env config vars set NAVER_CLIENT_SECRET=...
+
+```bash
+conda env config vars set NAVER_CLIENT_ID=...
+conda env config vars set NAVER_CLIENT_SECRET=...
+```
+
+## vLLM 적용
+- Windows 호환성 문제로 실행에러 발생. WSL2를 이용
+- 빠르지만 고정 메모리를 요구. 전용서버가 아니라면 장점 없음
+
+### 필수 요구사항
+- GPU (최소 24GB VRAM 권장)
+- CUDA 12.9 이상
+  ```bash
+  nvidia-smi
+  ```
+- Python 3.10+
+- 최신 transformers 라이브러리
+
+```bash
+conda create -n vllm python=3.12
+conda activate vllm
+```
+
+### CUDA & torch
+```bash
+conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
+```
+
+### vLLM
+```bash
+pip install vllm
 ```

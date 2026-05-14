@@ -154,7 +154,6 @@ python main.py --ticker 005930 --once --real
 
 - RSI_PERIOD, BB_PERIOD
 - EMA_SHORT, EMA_LONG, HTF_MULTIPLIER
-- MIN_PROFIT_BUFFER
 
 ### 리스크 관리
 

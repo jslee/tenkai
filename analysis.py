@@ -26,7 +26,7 @@ _colorama_init(autoreset=True)
 import config
 from kis_api import KISAuth, KISMarket
 from picker import (
-    _ask_lm_studio as _picker_ask,
+    _ask_to_picker as _picker_ask,
     _build_period_charts,
     _encode_image,
     _extract_json,
