@@ -196,7 +196,7 @@ MIN_TP_RATIO: float = float(os.environ.get("MIN_TP_RATIO", "0.015"))
 
 # ── 시장 환경 필터 임계값 ────────────────────────────
 MARKET_DROP_THRESHOLD: float = float(
-    os.environ.get("MARKET_DROP_THRESHOLD", "-3.0")
+    os.environ.get("MARKET_DROP_THRESHOLD", "-5.0")
 )  # 지수 폭락 기준 (%)
 
 # ── 수수료 설정 ──────────────────────────────────────
