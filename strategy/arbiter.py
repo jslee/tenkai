@@ -170,6 +170,18 @@ class Arbiter:
         else:
             position_text = "없음 (미보유 상태)"
 
+        last_exit = snapshot.get("last_exit_info")
+        if isinstance(last_exit, dict):
+            net_pnl_ratio_pct = float(last_exit.get("net_pnl_ratio_pct", 0.0))
+            result_label = "손실" if net_pnl_ratio_pct < 0 else "수익"
+            last_exit_text = (
+                f"매도 시간: {last_exit.get('exit_time', 'N/A').replace('T', ' ')}\n"
+                f"매도 가격: {int(last_exit.get('exit_price', 0)):,}원\n"
+                f"결과: {net_pnl_ratio_pct:+.2f}% ({result_label})"
+            )
+        else:
+            last_exit_text = "없음 (청산 이력 없음)"
+
         market_context_text = (
             f"시장 지수 변동률: {snapshot['market_change']:.2f}%\n"
             f"체결강도: {snapshot['trade_strength']:.1f}%\n"
@@ -200,6 +212,9 @@ class Arbiter:
 [현재 보유 포지션]
 {position_text}
 
+[최근 매도 정보 (Recent Sell Info)]
+{last_exit_text}
+
 [제세금 및 수수료]
 {int(cost_ratio)}%
 
@@ -226,6 +241,11 @@ class Arbiter:
    - 차트의 기술적 신호가 파괴되었다면, 매수가와 관계없이 냉정하게 SELL을 결정하라.
 6. 제세금 및 수수료:
    - 매매 시 발생하는 제세금과 수수료를 고려해, 실제 수익이 예상되는 경우에만 BUY/SELL을 결정하라. 
+7. 손실 후 재진입 제한 (Loss-Recovery Discipline):
+   - 만약 [최근 매도 정보]에 '손실' 기록이 있고, 그 시간이 얼마 지나지 않았다면:
+     * 매우 신중하게 접근하라. 단순히 지표가 좋다고 바로 BUY를 결정하지 마라.
+     * 반드시 '강력한 수급 유입(거래량 급증)'과 '추세 전환의 확증'이 동시에 나타날 때만 재진입을 고려하라.
+     * 판단이 애매하다면 무조건 HOLD를 선택하여 추가 손실을 방지하라.
 
 [출력 형식]
 반드시 아래 구조의 JSON 객체 하나만 반환하십시오. 다른 설명은 생략합니다.

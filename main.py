@@ -359,6 +359,20 @@ class DelphiTrader:
         self.risk.update_candles(base_snapshot["analysis_candles"])
         self.risk.update_atr(float(base_snapshot["indicators"].get("atr", 0.0)))
 
+        trade_history = self.risk.trade_history
+        last_trade = trade_history[-1] if trade_history else None
+        last_exit_info: dict[str, Any] | None = None
+        if last_trade is not None:
+            last_exit_info = {
+                "exit_time": last_trade.exit_time.isoformat(timespec="seconds"),
+                "entry_price": int(last_trade.entry_price),
+                "exit_price": int(last_trade.exit_price),
+                "qty": int(last_trade.qty),
+                "close_reason": str(last_trade.close_reason),
+                "net_pnl": float(last_trade.net_pnl),
+                "net_pnl_ratio_pct": float(last_trade.net_pnl_ratio * 100.0),
+            }
+
         return {
             "price_data": price_data,
             "candles_desc": candles_desc,
@@ -369,6 +383,7 @@ class DelphiTrader:
             "interval_snapshots": interval_snapshots,
             "analysis_candles": base_snapshot["analysis_candles"],
             "indicators": base_snapshot["indicators"],
+            "last_exit_info": last_exit_info,
         }
 
     async def run_cycle(self) -> None:

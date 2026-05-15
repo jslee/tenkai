@@ -6,6 +6,9 @@ kis_api/order.py — 주문 실행
 - 매도: TTTC0801U (실전) / VTTC0801U (모의)
 """
 
+import hashlib
+import hmac
+import json
 import logging
 from typing import Any
 
@@ -44,8 +47,8 @@ class KISOrder:
             tr_id=tr_id,
             ticker=ticker,
             qty=qty,
-            price=0,           # 시장가
-            order_type="01",   # 01: 시장가
+            price=0,  # 시장가
+            order_type="01",  # 01: 시장가
         )
 
     async def buy_limit(self, ticker: str, qty: int, price: int) -> dict[str, Any]:
@@ -71,7 +74,7 @@ class KISOrder:
             ticker=ticker,
             qty=qty,
             price=price,
-            order_type="00",   # 00: 지정가
+            order_type="00",  # 00: 지정가
         )
 
     # ── 매도 주문 ──────────────────────────────────────────────────────────
@@ -127,6 +130,19 @@ class KISOrder:
 
     # ── 내부 공통 주문 ─────────────────────────────────────────────────────
 
+    def _generate_hashkey(self, payload: dict) -> str:
+        """
+        KIS API 요청용 hashkey를 생성한다.
+        hashkey = HMAC-SHA256(JSON payload, app_secret)
+        """
+        payload_json = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+        hashkey = hmac.new(
+            self._auth.app_secret.encode("utf-8"),
+            payload_json.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        return hashkey
+
     async def _send_order(
         self,
         tr_id: str,
@@ -148,7 +164,18 @@ class KISOrder:
         }
         try:
             await self._auth.get_token()
-            headers = self._auth.get_headers(tr_id, {"hashkey": ""})
+            hashkey = self._generate_hashkey(payload)
+            headers = self._auth.get_headers(tr_id, {"hashkey": hashkey})
+
+            logger.debug(
+                "[주문] 요청 (tr_id=%s, ticker=%s, qty=%d, price=%d, acc=%s)",
+                tr_id,
+                ticker,
+                qty,
+                price,
+                acc_no[:8],
+            )
+
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     url,
@@ -156,8 +183,16 @@ class KISOrder:
                     json=payload,
                     timeout=aiohttp.ClientTimeout(total=10),
                 ) as resp:
-                    resp.raise_for_status()
                     data = await resp.json()
+
+                    if resp.status != 200:
+                        logger.error(
+                            "[주문] HTTP %d (tr_id=%s, 응답=%s)",
+                            resp.status,
+                            tr_id,
+                            json.dumps(data, ensure_ascii=False),
+                        )
+                    resp.raise_for_status()
 
             if data.get("rt_cd") != "0":
                 msg = data.get("msg1", "알 수 없는 오류")
@@ -167,7 +202,10 @@ class KISOrder:
             output = data.get("output", {})
             logger.critical(
                 "[주문] 완료 (tr_id=%s, ticker=%s, qty=%d, price=%d)",
-                tr_id, ticker, qty, price,
+                tr_id,
+                ticker,
+                qty,
+                price,
             )
             return {
                 "order_no": output.get("ODNO", ""),
