@@ -47,6 +47,7 @@ SYSTEM_PROMPT = """Follow these instructions strictly:
 """
 
 PICKER_PROMPT_TEMPLATE = """당신은 한국 주식 단기 스윙 트레이딩을 평가하는 '포트폴리오 스크리닝 에이전트'입니다.
+당장 내일 지정 종목을 매수할지 말지를 결정하는 것이 당신의 역할입니다.  
 
 [입력 데이터]
 - 종목코드: {ticker}
