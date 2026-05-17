@@ -10,23 +10,25 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import yaml
+
 import aiohttp
 import numpy as np
 
 import config
 from kis_api.market import KISMarket
+from strategy.indicators import _ema
 
 if TYPE_CHECKING:
     from strategy.risk import RiskManager
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """Follow these instructions strictly:
-- Do NOT output thinking or reasoning steps
-- Provide direct, concise answers only
-- Skip any internal monologue or thought process
-- Return only the final answer requested by the user
-"""
+_PROMPT_FILE = Path(__file__).parent.parent / "prompt.yaml"
+_prompt_data: dict = yaml.safe_load(_PROMPT_FILE.read_text(encoding="utf-8"))
+
+_SYSTEM_PROMPT: str = _prompt_data["system_prompt"]
+_ANALYSIS_PRINCIPLES: str = _prompt_data["analysis_principles"]
 
 _ACTION_MAP: dict[str, str] = {
     "BUY": "BUY",
@@ -158,6 +160,46 @@ class Arbiter:
         orderbook = snapshot["orderbook"]
         current_price = snapshot["price_data"]["current_price"]
 
+        indicators = snapshot["indicators"]
+        closes_1m = [
+            float(c["close"]) for c in reversed(snapshot.get("analysis_candles", []))
+        ]
+        closes_3m = [
+            float(c["close"])
+            for c in reversed(
+                snapshot.get("interval_snapshots", {})
+                .get(3, {})
+                .get("analysis_candles", [])
+            )
+        ]
+        ema_1m = {
+            5: indicators.get("ema_short", 0.0),
+            20: indicators.get("ema_long", 0.0),
+            30: _ema(closes_1m, 30)[-1] if len(closes_1m) >= 30 else 0.0,
+            60: _ema(closes_1m, 60)[-1] if len(closes_1m) >= 60 else 0.0,
+        }
+        ema_3m = {
+            20: _ema(closes_3m, 20)[-1] if len(closes_3m) >= 20 else 0.0,
+            60: _ema(closes_3m, 60)[-1] if len(closes_3m) >= 60 else 0.0,
+        }
+
+        # 그래프로 인식하는 것보다 정확한 수치로 제시하는 것이 판단에 더 도움이 될 것.
+        core_anchor = (
+            f"1m EMA: [5: {ema_1m[5]:,.0f} / 20: {ema_1m[20]:,.0f} / 30: {ema_1m[30]:,.0f} / 60: {ema_1m[60]:,.0f}]\n"
+            f"3m EMA: [20: {ema_3m[20]:,.0f} / 60: {ema_3m[60]:,.0f}]\n"
+            f"1m RSI: {indicators.get('rsi', 0.0):.0f}"
+            f"체결강도: {snapshot.get('trade_strength', 0.0):.0f}%"
+            f"매수잔량비율: {orderbook.get('buy_ratio', 0.5) * 100:.0f}%"
+        )
+
+        # 시장지수 및 호가창
+        market_context_text = (
+            f"시장 지수 변동률: {snapshot['market_change']:.2f}%\n"
+            f"매도호가 상위5(잔량): {_build_orderbook_str(orderbook.get('ask_prices', []), orderbook.get('ask_volumes', []))}\n"
+            f"매수호가 상위5(잔량): {_build_orderbook_str(orderbook.get('bid_prices', []), orderbook.get('bid_volumes', []))}"
+        )
+
+        # 현재 보유 포지션
         pos = self.risk.position
         if pos:
             pnl_ratio = (current_price - pos.entry_price) / pos.entry_price * 100
@@ -170,6 +212,7 @@ class Arbiter:
         else:
             position_text = "없음 (미보유 상태)"
 
+        # 최근 매도 정보
         last_exit = snapshot.get("last_exit_info")
         if isinstance(last_exit, dict):
             net_pnl_ratio_pct = float(last_exit.get("net_pnl_ratio_pct", 0.0))
@@ -181,14 +224,6 @@ class Arbiter:
             )
         else:
             last_exit_text = "없음 (청산 이력 없음)"
-
-        market_context_text = (
-            f"시장 지수 변동률: {snapshot['market_change']:.2f}%\n"
-            f"체결강도: {snapshot['trade_strength']:.1f}%\n"
-            f"매도호가 상위5(잔량): {_build_orderbook_str(orderbook.get('ask_prices', []), orderbook.get('ask_volumes', []))}\n"
-            f"매수호가 상위5(잔량): {_build_orderbook_str(orderbook.get('bid_prices', []), orderbook.get('bid_volumes', []))}\n"
-            f"호가 잔량비율: {orderbook.get('buy_ratio', 0.5):.1%}"
-        )
 
         # 제세금 및 수수료를 계산한다. ETF는 0.
         cost_ratio = (
@@ -203,10 +238,17 @@ class Arbiter:
 - 최근 차트 이미지 3장 (1분봉, 3분봉, 5분봉 순서)
   * 포함 지표: 캔들, 볼린저밴드, RSI, 거래량, MACD, EMA(5, 20, 60)
   * 오른쪽 마지막 캔들이 현재 시점입니다.
-- 시장지수/체결강도 및 호가창 텍스트
+- 핵심지표 앵커
+- 시장지수 및 호가창 데이터
 - 현재 보유 포지션
+- 최근 매도 정보 (손실/수익 여부 포함)
+- 제세금 및 수수료 정보
 
-[현재 시장/호가 데이터]
+[핵심 지표 앵커]
+(참고: 텍스트 수치는 차트에 표시되지 않은 지표를 포함함)
+{core_anchor}
+
+[시장지수 및 호가창 데이터]
 {market_context_text}
 
 [현재 보유 포지션]
@@ -218,21 +260,8 @@ class Arbiter:
 [제세금 및 수수료]
 {int(cost_ratio)}%
 
-[분석 및 판단 원칙 - 반드시 준수할 것]
-1. 진입 패턴 (Entry Patterns):
-   - 눌림목: 상승 추세 중 1분봉이 볼린저밴드 하단 근접 + RSI 저점 신호
-   - 바닥권 반전: 하락 추세 중 1분봉 거래량 급증 + 양봉 출현 (수급 유입 시작)
-   - 모멘텀: 1분봉이 EMA 20을 거래량 동반 상향 돌파 (추세 전환 초입)
-   - **완벽한 확신을 기다리지 마라. 조기 진입이 수익의 원천이다. 틀리면 즉시 손절하면 된다.**
-
-2. 매도 패턴 (Exit Patterns):
-   - 상승 지속: 진입 후 가격 상승 중. 5분봉 고점 1~2개 하락 또는 RSI 70→하락 전환 시 SELL.
-   - 하락 반전: 진입 후 가격 하락 중. 1분봉 EMA 20 이탈 시 즉시 SELL.
-   - **손실을 작게, 수익은 키워라.**
-
-3. 리스크 규칙:
-   - 제세금 및 수수료를 고려하여 순수익이 예상될 때만 매매하라.
-   - 최근 매도에서 손실 발생 시 5분간 재진입을 자제하라. 5분 경과 후 정상 판단 재개.
+[분석 및 판단 원칙]
+{_ANALYSIS_PRINCIPLES}
    
 [출력 형식]
 반드시 아래 구조의 JSON 객체 하나만 반환하십시오. 다른 설명은 생략합니다.
@@ -276,7 +305,7 @@ class Arbiter:
             "max_tokens": config.ARBITER_MAX_TOKENS,
             "temperature": config.ARBITER_TEMPERATURE,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": content},
             ],
         }
