@@ -228,7 +228,7 @@ class Arbiter:
         # 제세금 및 수수료를 계산한다. ETF는 0.
         cost_ratio = (
             config.BROKER_FEE_RATE * 2 + config.TRANSACTION_TAX_RATE
-        )  # 매수+매도 수수료 + 거래세
+        ) * 100  # 매수+매도 수수료 + 거래세
 
         return f"""
 당신은 한국 주식 초단기 트레이딩을 수행하는 전문적인 '퀀트 트레이딩 에이전트'입니다.
