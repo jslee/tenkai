@@ -187,8 +187,8 @@ class Arbiter:
         core_anchor = (
             f"1m EMA: [5: {ema_1m[5]:,.0f} / 20: {ema_1m[20]:,.0f} / 30: {ema_1m[30]:,.0f} / 60: {ema_1m[60]:,.0f}]\n"
             f"3m EMA: [20: {ema_3m[20]:,.0f} / 60: {ema_3m[60]:,.0f}]\n"
-            f"1m RSI: {indicators.get('rsi', 0.0):.0f}"
-            f"체결강도: {snapshot.get('trade_strength', 0.0):.0f}%"
+            f"1m RSI: {indicators.get('rsi', 0.0):.0f}\n"
+            f"체결강도: {snapshot.get('trade_strength', 0.0):.0f}%\n"
             f"매수잔량비율: {orderbook.get('buy_ratio', 0.5) * 100:.0f}%"
         )
 
