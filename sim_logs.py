@@ -30,7 +30,7 @@ def create_mock_snapshot(record: dict) -> dict:
 
     current_price = record.get("current_price", 0)
     old_prompt_text = record.get("prompt_text", "")
-    
+
     snapshot = {
         "price_data": {"current_price": current_price},
         "orderbook": {
@@ -118,14 +118,14 @@ def create_mock_snapshot(record: dict) -> dict:
     return snapshot
 
 
-async def simulate_today(ticker: str):
+async def simulate_today(ticker: str, target_date: str = None):
     log_dir = os.environ.get("LOG_DIR", "logs")
     log_file = Path(log_dir) / f"trades_{ticker}.jsonl"
     if not log_file.exists():
         logger.error(f"로그 파일이 존재하지 않습니다: {log_file}")
         return
 
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = target_date if target_date else datetime.now().strftime("%Y-%m-%d")
     cycles = []
 
     with log_file.open("r", encoding="utf-8") as f:
@@ -145,7 +145,7 @@ async def simulate_today(ticker: str):
 
     if not cycles:
         logger.warning(
-            "시뮬레이션을 실행할 수 있는 유효한 오늘자 사이클 로그(chart_paths 포함)가 없습니다."
+            f"시뮬레이션을 실행할 수 있는 유효한 {today_str} 사이클 로그(chart_paths 포함)가 없습니다."
         )
         return
 
@@ -270,9 +270,15 @@ async def simulate_today(ticker: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="오늘자 로그 기반 매매 시뮬레이션")
+    parser = argparse.ArgumentParser(description="로그 기반 매매 시뮬레이션")
     parser.add_argument("--ticker", type=str, default=config.TICKER, help="종목 코드")
     parser.add_argument("--name", type=str, help="종목 이름")
+    parser.add_argument(
+        "--date",
+        type=str,
+        default=None,
+        help="시뮬레이션할 날짜 (YYYY-MM-DD 형식, 기본값: 오늘)",
+    )
     args = parser.parse_args()
 
     ticker = args.ticker
@@ -294,7 +300,7 @@ def main():
             return
 
     try:
-        asyncio.run(simulate_today(ticker))
+        asyncio.run(simulate_today(ticker, args.date))
     except KeyboardInterrupt:
         print("\n시뮬레이션을 강제 종료합니다.")
 
