@@ -28,6 +28,7 @@ _PROMPT_FILE = Path(__file__).parent.parent / "prompt.yaml"
 _prompt_data: dict = yaml.safe_load(_PROMPT_FILE.read_text(encoding="utf-8"))
 
 _SYSTEM_PROMPT: str = _prompt_data["system_prompt"]
+_ANALYSIS_INTRO: str = _prompt_data["analysis_intro"]
 _ANALYSIS_PRINCIPLES: str = _prompt_data["analysis_principles"]
 
 _ACTION_MAP: dict[str, str] = {
@@ -188,13 +189,13 @@ class Arbiter:
             f"1m EMA: [5: {ema_1m[5]:,.0f} / 20: {ema_1m[20]:,.0f} / 30: {ema_1m[30]:,.0f} / 60: {ema_1m[60]:,.0f}]\n"
             f"3m EMA: [20: {ema_3m[20]:,.0f} / 60: {ema_3m[60]:,.0f}]\n"
             f"1m RSI: {indicators.get('rsi', 0.0):.0f}\n"
-            f"체결강도: {snapshot.get('trade_strength', 0.0):.0f}%\n"
-            f"매수잔량비율: {orderbook.get('buy_ratio', 0.5) * 100:.0f}%"
         )
 
         # 시장지수 및 호가창
         market_context_text = (
             f"시장 지수 변동률: {snapshot['market_change']:.2f}%\n"
+            f"체결강도: {snapshot.get('trade_strength', 0.0):.0f}%\n"
+            f"매수잔량비율: {orderbook.get('buy_ratio', 0.5) * 100:.0f}%\n"
             f"매도호가 상위5(잔량): {_build_orderbook_str(orderbook.get('ask_prices', []), orderbook.get('ask_volumes', []))}\n"
             f"매수호가 상위5(잔량): {_build_orderbook_str(orderbook.get('bid_prices', []), orderbook.get('bid_volumes', []))}"
         )
@@ -231,18 +232,7 @@ class Arbiter:
         ) * 100  # 매수+매도 수수료 + 거래세
 
         return f"""
-당신은 한국 주식 초단기 트레이딩을 수행하는 전문적인 '퀀트 트레이딩 에이전트'입니다.
-목표: 제공된 멀티 타임프레임 차트와 호가 데이터를 분석하여 즉각적인 매매 의사결정을 내립니다.
-
-[입력 데이터 구성]
-- 최근 차트 이미지 3장 (1분봉, 3분봉, 5분봉 순서)
-  * 포함 지표: 캔들, 볼린저밴드, RSI, 거래량, MACD, EMA(5, 20, 60)
-  * 오른쪽 마지막 캔들이 현재 시점입니다.
-- 핵심지표 앵커
-- 시장지수 및 호가창 데이터
-- 현재 보유 포지션
-- 최근 매도 정보 (손실/수익 여부 포함)
-- 제세금 및 수수료 정보
+{_ANALYSIS_INTRO}
 
 [핵심 지표 앵커]
 (참고: 텍스트 수치는 차트에 표시되지 않은 지표를 포함함)

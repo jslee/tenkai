@@ -593,6 +593,7 @@ class DelphiTrader:
                 "ai_action": ai_action,
                 "confidence": ai_confidence,
                 "analysis": analysis,
+                "prompt_text": prompt_text,
             },
         )
 
