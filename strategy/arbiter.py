@@ -161,35 +161,35 @@ class Arbiter:
         orderbook = snapshot["orderbook"]
         current_price = snapshot["price_data"]["current_price"]
 
-        indicators = snapshot["indicators"]
-        closes_1m = [
-            float(c["close"]) for c in reversed(snapshot.get("analysis_candles", []))
-        ]
-        closes_3m = [
-            float(c["close"])
-            for c in reversed(
-                snapshot.get("interval_snapshots", {})
-                .get(3, {})
-                .get("analysis_candles", [])
-            )
-        ]
-        ema_1m = {
-            5: indicators.get("ema_short", 0.0),
-            20: indicators.get("ema_long", 0.0),
-            30: _ema(closes_1m, 30)[-1] if len(closes_1m) >= 30 else 0.0,
-            60: _ema(closes_1m, 60)[-1] if len(closes_1m) >= 60 else 0.0,
-        }
-        ema_3m = {
-            20: _ema(closes_3m, 20)[-1] if len(closes_3m) >= 20 else 0.0,
-            60: _ema(closes_3m, 60)[-1] if len(closes_3m) >= 60 else 0.0,
-        }
+        # indicators = snapshot["indicators"]
+        # closes_1m = [
+        #     float(c["close"]) for c in reversed(snapshot.get("analysis_candles", []))
+        # ]
+        # closes_3m = [
+        #     float(c["close"])
+        #     for c in reversed(
+        #         snapshot.get("interval_snapshots", {})
+        #         .get(3, {})
+        #         .get("analysis_candles", [])
+        #     )
+        # ]
+        # ema_1m = {
+        #     5: indicators.get("ema_short", 0.0),
+        #     20: indicators.get("ema_long", 0.0),
+        #     30: _ema(closes_1m, 30)[-1] if len(closes_1m) >= 30 else 0.0,
+        #     60: _ema(closes_1m, 60)[-1] if len(closes_1m) >= 60 else 0.0,
+        # }
+        # ema_3m = {
+        #     20: _ema(closes_3m, 20)[-1] if len(closes_3m) >= 20 else 0.0,
+        #     60: _ema(closes_3m, 60)[-1] if len(closes_3m) >= 60 else 0.0,
+        # }
 
-        # 그래프로 인식하는 것보다 정확한 수치로 제시하는 것이 판단에 더 도움이 될 것.
-        core_anchor = (
-            f"1m EMA: [5: {ema_1m[5]:,.0f} / 20: {ema_1m[20]:,.0f} / 30: {ema_1m[30]:,.0f} / 60: {ema_1m[60]:,.0f}]\n"
-            f"3m EMA: [20: {ema_3m[20]:,.0f} / 60: {ema_3m[60]:,.0f}]\n"
-            f"1m RSI: {indicators.get('rsi', 0.0):.0f}\n"
-        )
+        # # 그래프로 인식하는 것보다 정확한 수치로 제시하는 것이 판단에 더 도움이 될 것.
+        # core_anchor = (
+        #     f"1m EMA: [5: {ema_1m[5]:,.0f} / 20: {ema_1m[20]:,.0f} / 30: {ema_1m[30]:,.0f} / 60: {ema_1m[60]:,.0f}]\n"
+        #     f"3m EMA: [20: {ema_3m[20]:,.0f} / 60: {ema_3m[60]:,.0f}]\n"
+        #     f"1m RSI: {indicators.get('rsi', 0.0):.0f}\n"
+        # )
 
         # 시장지수 및 호가창
         market_context_text = (
@@ -234,10 +234,6 @@ class Arbiter:
         return f"""
 {_ANALYSIS_INTRO}
 
-[핵심 지표 앵커]
-(참고: 텍스트 수치는 차트에 표시되지 않은 지표를 포함함)
-{core_anchor}
-
 [시장지수 및 호가창 데이터]
 {market_context_text}
 
@@ -248,7 +244,7 @@ class Arbiter:
 {last_exit_text}
 
 [제세금 및 수수료]
-{int(cost_ratio)}%
+{cost_ratio:.3}%
 
 [분석 및 판단 원칙]
 {_ANALYSIS_PRINCIPLES}

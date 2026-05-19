@@ -169,7 +169,7 @@ MAX_DAILY_LOSS_RATIO: float = float(
     os.environ.get("MAX_DAILY_LOSS_RATIO", "0.05")
 )  # 일일 최대 손실 한도 (5%)
 MAX_TRADES_PER_DAY: int = int(
-    os.environ.get("MAX_TRADES_PER_DAY", "10")
+    os.environ.get("MAX_TRADES_PER_DAY", "20")
 )  # 일일 최대 거래 횟수
 
 # ── ATR 변동성 기반 동적 손/익절 설정 ──────────────────

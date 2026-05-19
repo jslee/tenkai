@@ -465,6 +465,8 @@ class DelphiTrader:
         chart_paths = await self.arbiter.render_charts(interval_snapshots)
         prompt_text = self.arbiter.build_prompt(snapshot)
 
+        print(f"{prompt_text}\n")
+
         decision = await self.arbiter.ask(prompt_text, chart_paths)
         ai_action = normalize_action(decision.get("action"))
         ai_reason = str(decision.get("reason", ""))
@@ -594,6 +596,14 @@ class DelphiTrader:
                 "confidence": ai_confidence,
                 "analysis": analysis,
                 "prompt_text": prompt_text,
+                "snapshot_data": {
+                    "price_data": snapshot.get("price_data", {}),
+                    "orderbook": snapshot.get("orderbook", {}),
+                    "market_change": snapshot.get("market_change", 0.0),
+                    "trade_strength": snapshot.get("trade_strength", 0.0),
+                    "indicators": snapshot.get("indicators", {}),
+                    "last_exit_info": snapshot.get("last_exit_info"),
+                },
             },
         )
 
