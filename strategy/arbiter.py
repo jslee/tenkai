@@ -201,30 +201,30 @@ class Arbiter:
         )
 
         # 현재 보유 포지션
-        pos = self.risk.position
-        if pos:
-            pnl_ratio = (current_price - pos.entry_price) / pos.entry_price * 100
-            if pos.direction == "SELL":
-                pnl_ratio = -pnl_ratio
-            position_text = (
-                f"[{pos.direction}] 진입가 {pos.entry_price:,}원 "
-                f"(현재 수익률 {pnl_ratio:+.2f}%)"
-            )
-        else:
-            position_text = "없음 (미보유 상태)"
+        # pos = self.risk.position
+        # if pos:
+        #     pnl_ratio = (current_price - pos.entry_price) / pos.entry_price * 100
+        #     if pos.direction == "SELL":
+        #         pnl_ratio = -pnl_ratio
+        #     position_text = (
+        #         f"[{pos.direction}] 진입가 {pos.entry_price:,}원 "
+        #         f"(현재 수익률 {pnl_ratio:+.2f}%)"
+        #     )
+        # else:
+        #     position_text = "없음 (미보유 상태)"
 
         # 최근 매도 정보
-        last_exit = snapshot.get("last_exit_info")
-        if isinstance(last_exit, dict):
-            net_pnl_ratio_pct = float(last_exit.get("net_pnl_ratio_pct", 0.0))
-            result_label = "손실" if net_pnl_ratio_pct < 0 else "수익"
-            last_exit_text = (
-                f"매도 시간: {last_exit.get('exit_time', 'N/A').replace('T', ' ')}\n"
-                f"매도 가격: {int(last_exit.get('exit_price', 0)):,}원\n"
-                f"결과: {net_pnl_ratio_pct:+.2f}% ({result_label})"
-            )
-        else:
-            last_exit_text = "없음 (청산 이력 없음)"
+        # last_exit = snapshot.get("last_exit_info")
+        # if isinstance(last_exit, dict):
+        #     net_pnl_ratio_pct = float(last_exit.get("net_pnl_ratio_pct", 0.0))
+        #     result_label = "손실" if net_pnl_ratio_pct < 0 else "수익"
+        #     last_exit_text = (
+        #         f"매도 시간: {last_exit.get('exit_time', 'N/A').replace('T', ' ')}\n"
+        #         f"매도 가격: {int(last_exit.get('exit_price', 0)):,}원\n"
+        #         f"결과: {net_pnl_ratio_pct:+.2f}% ({result_label})"
+        #     )
+        # else:
+        #     last_exit_text = "없음 (청산 이력 없음)"
 
         # 제세금 및 수수료를 계산한다. ETF는 0.
         cost_ratio = (
@@ -236,12 +236,6 @@ class Arbiter:
 
 [시장지수 및 호가창 데이터]
 {market_context_text}
-
-[현재 보유 포지션]
-{position_text}
-
-[최근 매도 정보 (Recent Sell Info)]
-{last_exit_text}
 
 [제세금 및 수수료]
 {cost_ratio:.3}%

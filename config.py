@@ -157,11 +157,11 @@ MAX_POSITION_RATIO: float = float(
     os.environ.get("MAX_POSITION_RATIO", "0.5")
 )  # 총 최대 보유 비율
 STOP_LOSS_RATIO: float = float(
-    os.environ.get("STOP_LOSS_RATIO", "0.02")
-)  # 손절 비율 (2%)
+    os.environ.get("STOP_LOSS_RATIO", "0.05")
+)  # 손절 비율 (5%)
 TAKE_PROFIT_RATIO: float = float(
-    os.environ.get("TAKE_PROFIT_RATIO", "0.05")
-)  # 익절 비율 (5%)
+    os.environ.get("TAKE_PROFIT_RATIO", "0.08")
+)  # 익절 비율 (8%)
 TRAILING_STOP_RATIO: float = float(
     os.environ.get("TRAILING_STOP_RATIO", "0.015")
 )  # 트레일링 스탑 비율 (1.5%)

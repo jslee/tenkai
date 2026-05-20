@@ -6,7 +6,7 @@ image:
 defaults:
   output_dir: charts
   intervals: [1, 3, 5]
-  plot_count: 120
+  plot_count: 60
 
 fonts:
   candidates:
