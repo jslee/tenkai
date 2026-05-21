@@ -1,8 +1,10 @@
+# 아래 항목을 제거하면 LLM이 분석 출력을 파싱할 때 오류가 발생할 수 있다.
+# 하지만, 좀더 나은 예측 정확도를 보인다.
+# - Skip any internal monologue or thought process
 system_prompt: |
   Follow these instructions strictly:
   - Do NOT output thinking or reasoning steps
   - Provide direct, concise answers only
-  - Skip any internal monologue or thought process
   - Return only the final answer requested by the user
 
 ################################################################################################################################
