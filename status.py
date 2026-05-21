@@ -146,7 +146,7 @@ def get_auth(is_paper: bool) -> KISAuth:
     )
 
 
-def get_recent_trades(limit: int = 10) -> list[dict]:
+def get_recent_trades(limit: int = 20) -> list[dict]:
     """로그 파일에서 최신 완료된 거래(CLOSE 이벤트)를 추출한다."""
     log_dir = os.environ.get("LOG_DIR", "logs")
     log_pattern = os.path.join(log_dir, "trades_*.jsonl")
@@ -302,7 +302,7 @@ async def render_status(market: KISMarket, is_paper: bool) -> None:
     table_str = _build_table(headers, rows, aligns, min_widths)
 
     # -- 최근 거래 내역 --
-    recent_trades = get_recent_trades(10)
+    recent_trades = get_recent_trades(20)
     trade_headers = [
         "시간",
         "종목",
@@ -323,15 +323,16 @@ async def render_status(market: KISMarket, is_paper: bool) -> None:
         "right",
         "right",
     ]
-    trade_min_widths = [8, 14, 6, 10, 10, 10, 8, 10]
+    trade_min_widths = [19, 14, 6, 10, 10, 10, 8, 10]
 
     if not recent_trades:
         trade_rows = [["", "거래 내역 없음", "", "", "", "", "", ""]]
     else:
         trade_rows = []
         for t in recent_trades:
-            # ISO timestamp에서 시간만 추출 (예: 2026-04-28T10:20:49 -> 10:20:49)
-            ts = t.get("timestamp", "").split("T")[-1][:8]
+            # ISO timestamp에서 년월일 시간 추출 (예: 2026-04-28T10:20:49 -> 2026-04-28 10:20:49)
+            ts_raw = t.get("timestamp", "")
+            ts = ts_raw.replace("T", " ")[:19] if ts_raw else ""
             ticker = t.get("ticker", "")
             name = market.get_stock_name(ticker)
             qty = t.get("qty", 0)
@@ -425,7 +426,7 @@ async def render_status(market: KISMarket, is_paper: bool) -> None:
     print(f"\n  오늘 종목별 누적 성과 (전체 로그 집계)")
     print(summary_table_str)
 
-    print(f"\n  최근 거래 내역 (10건)")
+    print(f"\n  최근 거래 내역 (20건)")
     print(trade_table_str)
 
 
