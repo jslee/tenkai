@@ -164,6 +164,8 @@ async def simulate_today(ticker: str, target_date: str = None):
         output_dir=Path("charts"),
     )
 
+    logger.info(f"\n[System Prompt]\n{arbiter.system_prompt}\n" + "=" * 80)
+
     last_price = 0
 
     for record in cycles:
@@ -192,7 +194,7 @@ async def simulate_today(ticker: str, target_date: str = None):
         # 로그에 기록된 차트 인터벌에 맞춰 Arbiter 설정 동적 업데이트
         arbiter.intervals = tuple(sorted(chart_paths.keys()))
 
-        logger.info(f"[{ts}] 현재가: {current_price:,}원 | LM Studio에 분석 요청 중...")
+        logger.info(f"[{ts}] 현재가: {current_price:,}원 | Arbiter에 분석 요청 중...")
 
         decision = await arbiter.ask(new_prompt_text, chart_paths)
         from strategy import normalize_action
@@ -207,8 +209,14 @@ async def simulate_today(ticker: str, target_date: str = None):
         ):
             ai_action = "HOLD"
 
+        analysis_data = decision.get("analysis") or {}
+        trend_context = analysis_data.get("trend_context", "N/A")
+        entry_trigger = analysis_data.get("entry_trigger", "N/A")
+        orderbook_strength = analysis_data.get("orderbook_strength", "N/A")
+
         logger.info(
-            f"[{ts}] AI 결정: {ai_action} (신뢰도: {ai_confidence}) | {ai_reason}"
+            f"[{ts}] AI 결정: {ai_action} (신뢰도: {ai_confidence})\n총평:{ai_reason}\n"
+            f"추세: {trend_context}\n진입: {entry_trigger}\n수급: {orderbook_strength}"
         )
 
         if risk.has_position:
