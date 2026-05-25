@@ -126,6 +126,11 @@ class Arbiter:
         self.output_dir = output_dir
         self.risk = risk
 
+    @property
+    def system_prompt(self) -> str:
+        """시스템 프롬프트 텍스트를 반환합니다."""
+        return _SYSTEM_PROMPT
+
     # ── 차트 렌더링 ─────────────────────────────────────────────────────────
 
     async def render_charts(
@@ -193,6 +198,7 @@ class Arbiter:
 
         # 시장지수 및 호가창
         market_context_text = (
+            f"현재가: {current_price:,}\n"
             f"시장 지수 변동률: {snapshot['market_change']:.2f}%\n"
             f"체결강도: {snapshot.get('trade_strength', 0.0):.0f}%\n"
             f"매수잔량비율: {orderbook.get('buy_ratio', 0.5) * 100:.0f}%\n"
@@ -201,17 +207,15 @@ class Arbiter:
         )
 
         # 현재 보유 포지션
-        # pos = self.risk.position
-        # if pos:
-        #     pnl_ratio = (current_price - pos.entry_price) / pos.entry_price * 100
-        #     if pos.direction == "SELL":
-        #         pnl_ratio = -pnl_ratio
-        #     position_text = (
-        #         f"[{pos.direction}] 진입가 {pos.entry_price:,}원 "
-        #         f"(현재 수익률 {pnl_ratio:+.2f}%)"
-        #     )
-        # else:
-        #     position_text = "없음 (미보유 상태)"
+        position_text = "없음 (미보유 상태)"
+        pos = self.risk.position
+        if pos:
+            pnl_ratio = (current_price - pos.entry_price) / pos.entry_price * 100
+            # if pos.direction == "SELL":
+            #     pnl_ratio = -pnl_ratio
+            position_text = (
+                f"진입가 {pos.entry_price:,}" f"(현재 수익률 {pnl_ratio:+.2f}%)"
+            )
 
         # 최근 매도 정보
         # last_exit = snapshot.get("last_exit_info")
@@ -237,6 +241,9 @@ class Arbiter:
 [시장지수 및 호가창 데이터]
 {market_context_text}
 
+[보유 포지션]
+{position_text}
+
 [제세금 및 수수료]
 {cost_ratio:.3}%
 
@@ -250,6 +257,7 @@ class Arbiter:
     "action": "BUY" | "SELL" | "HOLD",
     "confidence": 0~100,
     "analysis": {{
+        "thinking": thinking process for action.
         "trend_context": "5분봉 기준 시장의 배경 (상승/하락/횡보)",
         "entry_trigger": "1/3분봉에서 발견된 진입 신호 (눌림목/돌파/반등 등)",
         "orderbook_strength": "체결강도 및 호가 수급의 유효성"
@@ -297,17 +305,17 @@ class Arbiter:
                     resp.raise_for_status()
                     data = await resp.json()
         except aiohttp.ClientError as exc:
-            logger.error("[LM Studio] HTTP 오류: %s", exc)
+            logger.error("[arbiter] HTTP 오류: %s", exc)
             return {"action": "HOLD", "reason": str(exc)}
         except Exception as exc:
-            logger.error("[LM Studio] 호출 실패: %s", exc)
+            logger.error("[arbiter] 호출 실패: %s", exc)
             return {"action": "HOLD", "reason": str(exc)}
 
         try:
             raw_text = _extract_lm_response_text(data)
             parsed = _extract_json(raw_text)
         except Exception as exc:
-            logger.error("[LM Studio] 응답 파싱 실패: %s | raw=%s", exc, data)
+            logger.error("[arbiter] 응답 파싱 실패: %s | raw=%s", exc, data)
             return {"action": "HOLD", "reason": f"응답 파싱 실패: {exc}"}
 
         parsed["action"] = normalize_action(parsed.get("action"))
