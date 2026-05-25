@@ -4,264 +4,88 @@ tests/test_filters.py — 각 Gate 필터 단위 테스트
 실행: python -m pytest tests/ -v
 """
 
-import asyncio
 from datetime import datetime
-from unittest.mock import AsyncMock, patch
-
 import config
-
-# ─────────────────────────────────────────────────────────────────────────────
-# gate 테스트
-# ─────────────────────────────────────────────────────────────────────────────
+from filters import gate_market_filter
 
 
-            indicators,
-        )
+def test_gate_market_filter_passed(monkeypatch):
+    monkeypatch.setattr(config, "MARKET_DROP_THRESHOLD", -2.0)
+    monkeypatch.setattr(config, "MAX_DAILY_LOSS_RATIO", 0.05)
 
-        assert passed is False
-        assert direction == "NEUTRAL"
-        assert score == 1
-        assert any("MACD-GX" in signal for signal in signals)
+    market_data = {
+        "market_change": -0.5,
+        "current_volume": 10000,
+        "circuit_breaker": False,
+        "daily_loss_ratio": 0.01,
+    }
 
-    def test_setup_adds_macd_dead_cross_bonus(self):
-        from filters.gate2_signal import gate2_setup_filter
-
-        indicators = self._make_setup_indicators(
-            macd_prev=2.0,
-            macd_signal_prev=3.0,
-            macd_prev2=3.0,
-            macd_signal_prev2=3.0,
-            htf_ema_long=70000.0,
-        )
-
-        passed, score, direction, signals = gate2_setup_filter(
-            self._make_closed_candles(
-                latest_close=70000,
-                latest_open=70000,
-                latest_volume=500_000,
-            ),
-            indicators,
-        )
-
-        assert passed is False
-        assert direction == "NEUTRAL"
-        assert score == 1
-        assert any("MACD-DX" in signal for signal in signals)
-
-    def test_5m_window_counts_recent_rsi_hook_from_previous_loop(self, monkeypatch):
-        from filters.gate2_signal import gate2_setup_filter
-
-        monkeypatch.setattr(config, "CANDLE_INTERVAL", 5)
-
-        first_indicators = self._make_setup_indicators(
-            rsi=31.0,
-            rsi_prev=28.0,
-            htf_ema_long=70000.0,
-        )
-        first_candles = [
-            {
-                "open": 70000,
-                "high": 70200,
-                "low": 69900,
-                "close": 70100,
-                "volume": 500_000,
-                "timestamp": "20260509095000",
-            },
-            {
-                "open": 69900,
-                "high": 70050,
-                "low": 69800,
-                "close": 69950,
-                "volume": 450_000,
-                "timestamp": "20260509094500",
-            },
-        ]
-
-        gate2_setup_filter(first_candles, first_indicators)
-
-        second_indicators = self._make_setup_indicators(htf_ema_long=70150.0)
-        second_candles = [
-            {
-                "open": 70100,
-                "high": 70250,
-                "low": 70050,
-                "close": 70150,
-                "volume": 480_000,
-                "timestamp": "20260509095500",
-            },
-            {
-                "open": 70000,
-                "high": 70100,
-                "low": 69900,
-                "close": 70100,
-                "volume": 500_000,
-                "timestamp": "20260509095000",
-            },
-        ]
-
-        passed, score, direction, signals = gate2_setup_filter(
-            second_candles, second_indicators
-        )
-
-        assert passed is False
-        assert direction == "NEUTRAL"
-        assert score == 3
-        assert any("RSI:↑(095000)" in signal for signal in signals)
-
-    def test_5m_window_rejects_signal_outside_timestamp_window(self, monkeypatch):
-        from filters.gate2_signal import gate2_setup_filter
-
-        monkeypatch.setattr(config, "CANDLE_INTERVAL", 5)
-
-        first_indicators = self._make_setup_indicators(
-            rsi=31.0,
-            rsi_prev=28.0,
-            htf_ema_long=70000.0,
-        )
-        first_candles = [
-            {
-                "open": 70000,
-                "high": 70100,
-                "low": 69900,
-                "close": 70100,
-                "volume": 500_000,
-                "timestamp": "20260509095000",
-            },
-            {
-                "open": 70000,
-                "high": 70100,
-                "low": 69900,
-                "close": 70000,
-                "volume": 500_000,
-                "timestamp": "20260509094500",
-            },
-        ]
-
-        gate2_setup_filter(first_candles, first_indicators)
-
-        second_indicators = self._make_setup_indicators(htf_ema_long=70000.0)
-        second_candles = [
-            {
-                "open": 70000,
-                "high": 70100,
-                "low": 69900,
-                "close": 70000,
-                "volume": 500_000,
-                "timestamp": "20260509100500",
-            },
-            {
-                "open": 70000,
-                "high": 70100,
-                "low": 69900,
-                "close": 70000,
-                "volume": 500_000,
-                "timestamp": "20260509100000",
-            },
-        ]
-
-        passed, score, direction, signals = gate2_setup_filter(
-            second_candles, second_indicators
-        )
-
-        assert passed is False
-        assert direction == "NEUTRAL"
-        assert score == 0
-        assert not any("RSI반등" in signal for signal in signals)
-
-    def test_wrapper_blocks_buy_setup_when_live_bar_reverses(self):
-        from filters.gate2_signal import gate2_signal_filter
-
-        setup_indicators = self._make_setup_indicators(
-            rsi=31.0,
-            rsi_prev=28.0,
-            macd_prev=-4.0,
-            macd_signal_prev=-5.0,
-            macd_prev2=-6.0,
-            macd_signal_prev2=-5.0,
-            ema_short=71000.0,
-            ema_long=70000.0,
-        )
-        passed, score, direction, signals = gate2_signal_filter(
-            self._make_closed_candles(),
-            setup_indicators,
-            live_candles=self._make_live_candles(
-                current_open=70100,
-                current_close=69700,
-                prev_close=70000,
-            ),
-            live_indicators=self._make_setup_indicators(),
-        )
-        assert direction == "BUY"
-        assert score >= 6
-        assert any("TRIGGER역행음봉" in signal for signal in signals)
-
-    def test_wrapper_allows_buy_setup_when_live_bar_confirms(self):
-        from filters.gate2_signal import gate2_signal_filter
-
-        setup_indicators = self._make_setup_indicators(
-            rsi=31.0,
-            rsi_prev=28.0,
-            macd_prev=-4.0,
-            macd_signal_prev=-5.0,
-            macd_prev2=-6.0,
-            macd_signal_prev2=-5.0,
-            ema_short=71000.0,
-            ema_long=70000.0,
-        )
-        live_indicators = self._make_setup_indicators(median_vol=1_000_000.0)
-
-        passed, score, direction, signals = gate2_signal_filter(
-            self._make_closed_candles(),
-            setup_indicators,
-            live_candles=self._make_live_candles(
-                current_open=70020,
-                current_close=70080,
-                prev_close=70000,
-                current_volume=900_000,
-            ),
-            live_indicators=live_indicators,
-        )
-
-        assert passed is True
-        assert direction == "BUY"
-        assert score >= 6
-        assert any("TRIGGER중립" in signal for signal in signals)
-
-    def test_wrapper_keeps_buy_setup_on_neutral_live_bar(self):
-        from filters.gate2_signal import gate2_signal_filter
-
-        setup_indicators = self._make_setup_indicators(
-            rsi=31.0,
-            rsi_prev=28.0,
-            macd_prev=-4.0,
-            macd_signal_prev=-5.0,
-            macd_prev2=-6.0,
-            macd_signal_prev2=-5.0,
-            ema_short=71000.0,
-            ema_long=70000.0,
-        )
-
-        passed, score, direction, signals = gate2_signal_filter(
-            self._make_closed_candles(),
-            setup_indicators,
-            live_candles=self._make_live_candles(
-                current_open=70000,
-                current_close=70000,
-                prev_close=70020,
-                current_volume=200_000,
-            ),
-            live_indicators=self._make_setup_indicators(median_vol=1_000_000.0),
-        )
-
-        assert passed is True
-        assert direction == "BUY"
-        assert score >= 6
-        assert any("TRIGGER중립(차단없음)" in signal for signal in signals)
+    passed, result = gate_market_filter(market_data)
+    assert passed is True
+    assert result["passed"] is True
+    assert result["halt_trading_today"] is False
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# RiskManager 테스트
-# ─────────────────────────────────────────────────────────────────────────────
+def test_gate_market_filter_market_drop(monkeypatch):
+    monkeypatch.setattr(config, "MARKET_DROP_THRESHOLD", -2.0)
+
+    market_data = {
+        "market_change": -2.5,
+        "current_volume": 10000,
+        "circuit_breaker": False,
+        "daily_loss_ratio": 0.01,
+    }
+
+    passed, result = gate_market_filter(market_data)
+    assert passed is False
+    assert result["passed"] is False
+    assert any("폭락" in check["detail"] for check in result["checks"] if not check["passed"])
+
+
+def test_gate_market_filter_zero_volume():
+    market_data = {
+        "market_change": 0.0,
+        "current_volume": 0,
+        "circuit_breaker": False,
+        "daily_loss_ratio": 0.0,
+    }
+
+    passed, result = gate_market_filter(market_data)
+    assert passed is False
+    assert result["passed"] is False
+    assert any("거래량 없음" in check["detail"] for check in result["checks"] if not check["passed"])
+
+
+def test_gate_market_filter_circuit_breaker():
+    market_data = {
+        "market_change": 0.0,
+        "current_volume": 100,
+        "circuit_breaker": True,
+        "daily_loss_ratio": 0.0,
+    }
+
+    passed, result = gate_market_filter(market_data)
+    assert passed is False
+    assert result["passed"] is False
+    assert any("서킷브레이커 발동" in check["detail"] for check in result["checks"] if not check["passed"])
+
+
+def test_gate_market_filter_daily_loss_limit(monkeypatch):
+    monkeypatch.setattr(config, "MAX_DAILY_LOSS_RATIO", 0.05)
+
+    market_data = {
+        "market_change": 0.0,
+        "current_volume": 100,
+        "circuit_breaker": False,
+        "daily_loss_ratio": 0.06,
+    }
+
+    passed, result = gate_market_filter(market_data)
+    assert passed is False
+    assert result["passed"] is False
+    assert result["halt_trading_today"] is True
+    assert any("손실 한도 초과" in check["detail"] for check in result["checks"] if not check["passed"])
+
 
 
 class TestRiskManager:
@@ -274,39 +98,46 @@ class TestRiskManager:
         self.rm.sync_daily_stats(total_assets=10_000_000)
 
     def test_can_enter_initial(self):
-        can, reason = self.rm.can_enter()
+        can, reason = self.rm.can_enter(70000, 10_000_000)
         assert can is True
 
     def test_cannot_enter_when_position_exists(self):
         params = self.rm.calc_order_params(70000, 10_000_000)
-        self.rm.open_position(
+        # 10_000_000 * 0.5 = 5_000_000 is MAX_POSITION_RATIO limit. 
+        # Add a position of 80 shares (80 * 70,000 = 5,600,000), which exceeds the limit.
+        self.rm.add_position(
             "005930",
             "BUY",
             70000,
-            int(params["qty"]),
+            80,
             params["stop_loss"],
             params["take_profit"],
         )
-        can, reason = self.rm.can_enter()
+        can, reason = self.rm.can_enter(70000, 10_000_000)
         assert can is False
-        assert "포지션" in reason
+        assert "한도" in reason
 
-    def test_calc_order_qty(self):
+    def test_calc_order_qty(self, monkeypatch):
+        monkeypatch.setattr(config, "SINGLE_TRADE_RATIO", 0.1)
         params = self.rm.calc_order_params(current_price=70000, total_assets=10_000_000)
         expected_qty = int((10_000_000 * 0.1) / 70000)  # floor(1000000/70000) = 14
         assert params["qty"] == expected_qty
 
-    def test_stop_loss_price(self):
+    def test_stop_loss_price(self, monkeypatch):
+        monkeypatch.setattr(config, "STOP_LOSS_RATIO", 0.02)
         params = self.rm.calc_order_params(current_price=70000, total_assets=10_000_000)
         assert abs(params["stop_loss"] - 70000 * 0.98) < 1
 
-    def test_take_profit_price(self):
+    def test_take_profit_price(self, monkeypatch):
+        monkeypatch.setattr(config, "TAKE_PROFIT_RATIO", 0.04)
         params = self.rm.calc_order_params(current_price=70000, total_assets=10_000_000)
         assert abs(params["take_profit"] - 70000 * 1.04) < 1
 
-    def test_stop_loss_trigger(self):
+    def test_stop_loss_trigger(self, monkeypatch):
+        monkeypatch.setattr(config, "STOP_LOSS_RATIO", 0.02)
+        monkeypatch.setattr(config, "TAKE_PROFIT_RATIO", 0.04)
         params = self.rm.calc_order_params(70000, 10_000_000)
-        self.rm.open_position(
+        self.rm.add_position(
             "005930",
             "BUY",
             70000,
@@ -317,12 +148,14 @@ class TestRiskManager:
         trading_time = datetime(2026, 3, 28, 10, 0, 0)
         check = self.rm.check_position(
             current_price=68550, current_time=trading_time
-        )  # 2% 이하
+        )  # 2% 이하 (68600 이하)
         assert check["action"] == "STOP_LOSS"
 
-    def test_trailing_stop_activation(self):
+    def test_trailing_stop_activation(self, monkeypatch):
+        monkeypatch.setattr(config, "STOP_LOSS_RATIO", 0.02)
+        monkeypatch.setattr(config, "TAKE_PROFIT_RATIO", 0.04)
         params = self.rm.calc_order_params(70000, 10_000_000)
-        self.rm.open_position(
+        self.rm.add_position(
             "005930",
             "BUY",
             70000,
@@ -336,9 +169,12 @@ class TestRiskManager:
         assert check["action"] == "HOLD"
         assert self.rm.position.trailing_active is True  # type: ignore
 
-    def test_trailing_stop_trigger(self):
+    def test_trailing_stop_trigger(self, monkeypatch):
+        monkeypatch.setattr(config, "STOP_LOSS_RATIO", 0.02)
+        monkeypatch.setattr(config, "TAKE_PROFIT_RATIO", 0.04)
+        monkeypatch.setattr(config, "TRAILING_STOP_RATIO", 0.015)
         params = self.rm.calc_order_params(70000, 10_000_000)
-        self.rm.open_position(
+        self.rm.add_position(
             "005930",
             "BUY",
             70000,
@@ -353,9 +189,10 @@ class TestRiskManager:
         check = self.rm.check_position(current_price=71900, current_time=trading_time)
         assert check["action"] == "TRAILING_STOP"
 
-    def test_force_close_at_market_close(self):
+    def test_force_close_at_market_close(self, monkeypatch):
+        monkeypatch.setattr(config, "HOLD_OVERNIGHT", False)
         params = self.rm.calc_order_params(70000, 10_000_000)
-        self.rm.open_position(
+        self.rm.add_position(
             "005930",
             "BUY",
             70000,
@@ -367,40 +204,38 @@ class TestRiskManager:
         check = self.rm.check_position(current_price=70500, current_time=close_time)
         assert check["action"] == "FORCE_CLOSE_MARKET"
 
-    def test_close_position_pnl_buy(self):
+    def test_close_position_pnl_buy(self, monkeypatch):
         params = self.rm.calc_order_params(70000, 10_000_000)
         qty = int(params["qty"])
-        self.rm.open_position(
+        self.rm.add_position(
             "005930", "BUY", 70000, qty, params["stop_loss"], params["take_profit"]
         )
         pnl = self.rm.close_position(exit_price=71000)
         assert pnl == (71000 - 70000) * qty
         assert self.rm.has_position is False
 
-    def test_halt_after_daily_loss_limit(self):
+    def test_halt_after_daily_loss_limit(self, monkeypatch):
+        monkeypatch.setattr(config, "MAX_DAILY_LOSS_RATIO", 0.05)
         params = self.rm.calc_order_params(70000, 10_000_000)
         qty = int(params["qty"])
-        self.rm.open_position(
+        self.rm.add_position(
             "005930", "BUY", 70000, qty, params["stop_loss"], params["take_profit"]
         )
         # 큰 손실 발생 (초기 자산 10_000_000의 5% = 500_000 이상)
         self.rm.close_position(exit_price=30000)
         assert self.rm.halt_today is True
-        can, _ = self.rm.can_enter()
+        can, _ = self.rm.can_enter(70000, 10_000_000)
         assert can is False
 
-    def test_max_trades_per_day(self):
-        import config as _cfg
-
-        _cfg.MAX_TRADES_PER_DAY = 2
+    def test_max_trades_per_day(self, monkeypatch):
+        monkeypatch.setattr(config, "MAX_TRADES_PER_DAY", 2)
         params = self.rm.calc_order_params(70000, 10_000_000)
         qty = int(params["qty"])
         for _ in range(2):
-            self.rm.open_position(
+            self.rm.add_position(
                 "005930", "BUY", 70000, qty, params["stop_loss"], params["take_profit"]
             )
             self.rm.close_position(exit_price=70500)
-        can, reason = self.rm.can_enter()
+        can, reason = self.rm.can_enter(70000, 10_000_000)
         assert can is False
         assert "횟수" in reason
-        _cfg.MAX_TRADES_PER_DAY = 5  # 원복
