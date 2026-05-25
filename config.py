@@ -151,7 +151,7 @@ CONSEC_BEARISH_BODY_RATIO: float = float(
 )
 
 SINGLE_TRADE_RATIO: float = float(
-    os.environ.get("SINGLE_TRADE_RATIO", "0.2")
+    os.environ.get("SINGLE_TRADE_RATIO", "0.1")
 )  # 1회 진입 매수 비율
 MAX_POSITION_RATIO: float = float(
     os.environ.get("MAX_POSITION_RATIO", "0.5")
@@ -160,7 +160,7 @@ STOP_LOSS_RATIO: float = float(
     os.environ.get("STOP_LOSS_RATIO", "0.05")
 )  # 손절 비율 (5%)
 TAKE_PROFIT_RATIO: float = float(
-    os.environ.get("TAKE_PROFIT_RATIO", "0.08")
+    os.environ.get("TAKE_PROFIT_RATIO", "0.05")
 )  # 익절 비율 (8%)
 TRAILING_STOP_RATIO: float = float(
     os.environ.get("TRAILING_STOP_RATIO", "0.015")
@@ -169,7 +169,7 @@ MAX_DAILY_LOSS_RATIO: float = float(
     os.environ.get("MAX_DAILY_LOSS_RATIO", "0.05")
 )  # 일일 최대 손실 한도 (5%)
 MAX_TRADES_PER_DAY: int = int(
-    os.environ.get("MAX_TRADES_PER_DAY", "20")
+    os.environ.get("MAX_TRADES_PER_DAY", "10")
 )  # 일일 최대 거래 횟수
 
 # ── ATR 변동성 기반 동적 손/익절 설정 ──────────────────
@@ -219,6 +219,11 @@ ARBITER_BASE_URL: str = os.environ.get(
     "ARBITER_BASE_URL", "http://127.0.0.1:1234/v1/chat/completions"
 )
 ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "google/gemma-4-26b-a4b")
+# ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "google/gemma-4-31b")
+# ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "qwen/qwen3-vl-30b") # 0/1 -11,023
+# ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "qwen/qwen3.6-35b-a3b")
+# ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "qwen/qwen3.6-27b")
+# ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "zai-org/glm-4.6v-flash")
 ARBITER_MAX_TOKENS: int = int(os.environ.get("ARBITER_MAX_TOKENS", "512"))
 ARBITER_TEMPERATURE: float = float(os.environ.get("ARBITER_TEMPERATURE", "0.1"))
 ARBITER_TIMEOUT_SEC: int = int(os.environ.get("ARBITER_TIMEOUT_SEC", "60"))
