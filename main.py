@@ -488,6 +488,7 @@ class DelphiTrader:
         order_qty: int | None = None
         stop_loss: float | None = None
         take_profit: float | None = None
+        error_detail: str | None = None
 
         analysis = decision.get("analysis", {})
         analysis_str = (
@@ -523,26 +524,33 @@ class DelphiTrader:
                 if qty < 1:
                     logger.info("[Cycle] BUY 수량 부족")
                 else:
-                    await self.order.buy_market(self.ticker, qty)
-                    self.risk.add_position(
-                        ticker=self.ticker,
-                        direction="BUY",
-                        entry_price=current_price,
-                        qty=qty,
-                        stop_loss=order_params["stop_loss"],
-                        take_profit=order_params["take_profit"],
-                    )
-                    executed_action = "BUY"
-                    order_price = current_price
-                    order_qty = qty
-                    stop_loss = float(order_params["stop_loss"])
-                    take_profit = float(order_params["take_profit"])
-                    logger.info(
-                        "[Cycle] BUY 실행: %s %d주 @ %d",
-                        self.ticker,
-                        qty,
-                        current_price,
-                    )
+                    try:
+                        await self.order.buy_market(self.ticker, qty)
+                        self.risk.add_position(
+                            ticker=self.ticker,
+                            direction="BUY",
+                            entry_price=current_price,
+                            qty=qty,
+                            stop_loss=order_params["stop_loss"],
+                            take_profit=order_params["take_profit"],
+                        )
+                        executed_action = "BUY"
+                        order_price = current_price
+                        order_qty = qty
+                        stop_loss = float(order_params["stop_loss"])
+                        take_profit = float(order_params["take_profit"])
+                        logger.info(
+                            "[Cycle] BUY 실행: %s %d주 @ %d",
+                            self.ticker,
+                            qty,
+                            current_price,
+                        )
+                    except Exception as exc:
+                        logger.error(
+                            "[Cycle] BUY 주문 실행 중 오류 발생 (포지션 추가 생략): %s",
+                            exc,
+                        )
+                        error_detail = str(exc)
         elif ai_action == "SELL":
             pos = self.risk.position
             if pos is None:
@@ -551,25 +559,35 @@ class DelphiTrader:
                 entry_time = pos.entry_time
                 entry_price = pos.entry_price
                 qty = pos.qty
-                await self.order.sell_market(self.ticker, qty)
-                pnl = self.risk.close_position(
-                    current_price, close_reason="ARBITER_SELL"
-                )
-                write_close_log(
-                    ticker=self.ticker,
-                    exit_price=current_price,
-                    qty=qty,
-                    entry_price=entry_price,
-                    pnl=pnl,
-                    close_reason="ARBITER_SELL",
-                    entry_time=entry_time,
-                )
-                executed_action = "SELL"
-                order_price = current_price
-                order_qty = qty
-                logger.info(
-                    "[Cycle] SELL 실행: %s %d주 @ %d", self.ticker, qty, current_price
-                )
+                try:
+                    await self.order.sell_market(self.ticker, qty)
+                    pnl = self.risk.close_position(
+                        current_price, close_reason="ARBITER_SELL"
+                    )
+                    write_close_log(
+                        ticker=self.ticker,
+                        exit_price=current_price,
+                        qty=qty,
+                        entry_price=entry_price,
+                        pnl=pnl,
+                        close_reason="ARBITER_SELL",
+                        entry_time=entry_time,
+                    )
+                    executed_action = "SELL"
+                    order_price = current_price
+                    order_qty = qty
+                    logger.info(
+                        "[Cycle] SELL 실행: %s %d주 @ %d",
+                        self.ticker,
+                        qty,
+                        current_price,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "[Cycle] SELL 주문 실행 중 오류 발생 (포지션 유지): %s",
+                        exc,
+                    )
+                    error_detail = str(exc)
 
         write_cycle_log(
             ticker=self.ticker,
@@ -604,6 +622,7 @@ class DelphiTrader:
                     "indicators": snapshot.get("indicators", {}),
                     "last_exit_info": snapshot.get("last_exit_info"),
                 },
+                **({"error": error_detail} if error_detail else {}),
             },
         )
 
