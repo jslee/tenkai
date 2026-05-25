@@ -11,7 +11,7 @@ def test_monitor_interval_stays_default_when_far_from_exit_levels(monkeypatch):
 
     risk = RiskManager()
     risk.update_atr(100.0)
-    risk.open_position(
+    risk.add_position(
         ticker="005930",
         direction="BUY",
         entry_price=1000,
@@ -30,7 +30,7 @@ def test_monitor_interval_switches_to_fast_near_exit_levels(monkeypatch):
 
     risk = RiskManager()
     risk.update_atr(100.0)
-    risk.open_position(
+    risk.add_position(
         ticker="005930",
         direction="BUY",
         entry_price=1000,
