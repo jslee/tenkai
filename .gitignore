@@ -11,3 +11,4 @@ build/
 .venv/
 venv/
 charts/
+reports/
