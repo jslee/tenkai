@@ -58,6 +58,7 @@ def _load_chart_config() -> SimpleNamespace:
             "rsi": "#ff8c00",
             "rsi_overbought": "#d60000",
             "rsi_oversold": "#0057d8",
+            "rsi_middle": "#888888",
             "volume_up": "#d60000",
             "volume_down": "#0057d8",
             "macd": "#111111",
@@ -412,6 +413,7 @@ def _plot_rsi(ax: plt.Axes, df: pd.DataFrame) -> None:
     colors = chart_config.COLORS
     ax.plot(df["x"], df["rsi"], color=colors["rsi"], linewidth=1.4)
     ax.axhline(70, color=colors["rsi_overbought"], linestyle="--", linewidth=0.9)
+    ax.axhline(50, color=colors["rsi_middle"], linestyle="--", linewidth=0.9)
     ax.axhline(30, color=colors["rsi_oversold"], linestyle="--", linewidth=0.9)
     ax.set_ylim(0, 100)
     ax.set_ylabel("RSI", color=colors["text"])
@@ -446,7 +448,7 @@ def _plot_macd(ax: plt.Axes, df: pd.DataFrame) -> None:
             else:
                 hist_colors.append(colors["macd_hist_negative_weak"])
 
-    ax.bar(df["x"], df["macd_hist"], color=hist_colors, width=0.62, alpha=0.65)
+    ax.bar(df["x"], df["macd_hist"], color=hist_colors, width=0.62, alpha=0.90)
     ax.plot(df["x"], df["macd"], color=colors["macd"], linewidth=1.2, label="MACD")
     ax.plot(
         df["x"],
