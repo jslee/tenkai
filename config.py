@@ -73,10 +73,10 @@ CANDLE_INTERVAL: int = int(os.environ.get("CANDLE_INTERVAL", "1"))
 # ※ FHKST03010230(fid_pw_data_incu_yn=Y) 실측 결과: 15:30 이후 데이터 없음.
 #    시간외 분봉이 필요하다면 별도 API 엔드포인트 조사가 필요하다.
 #
-# 진입 가능 시작 시각 (장 시작 직후 갭 변동 회피-> +10분)
-MARKET_OPEN_TIME: str = "09:10"
+# 진입 가능 시작 시각 (장 시작 직후 갭 변동 회피-> +5분)
+MARKET_OPEN_TIME: str = "09:05"
 # 장 마감 강제 청산 시각 (HOLD_OVERNIGHT=False 시 미청산 포지션 강제 청산)
-MARKET_CLOSE_TIME: str = "15:10"
+MARKET_CLOSE_TIME: str = "15:15"
 
 
 # ── 오버나이트 및 종료 설정 ─────────────────────────────────────
@@ -151,10 +151,10 @@ CONSEC_BEARISH_BODY_RATIO: float = float(
 )
 
 SINGLE_TRADE_RATIO: float = float(
-    os.environ.get("SINGLE_TRADE_RATIO", "0.1")
+    os.environ.get("SINGLE_TRADE_RATIO", "0.2")
 )  # 1회 진입 매수 비율
 MAX_POSITION_RATIO: float = float(
-    os.environ.get("MAX_POSITION_RATIO", "0.5")
+    os.environ.get("MAX_POSITION_RATIO", "0.8")
 )  # 총 최대 보유 비율
 STOP_LOSS_RATIO: float = float(
     os.environ.get("STOP_LOSS_RATIO", "0.05")
@@ -224,7 +224,7 @@ ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "google/gemma-4-26b-a4b")
 # ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "qwen/qwen3.6-35b-a3b")
 # ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "qwen/qwen3.6-27b")
 # ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "zai-org/glm-4.6v-flash")
-ARBITER_MAX_TOKENS: int = int(os.environ.get("ARBITER_MAX_TOKENS", "512"))
+ARBITER_MAX_TOKENS: int = int(os.environ.get("ARBITER_MAX_TOKENS", "4096"))
 ARBITER_TEMPERATURE: float = float(os.environ.get("ARBITER_TEMPERATURE", "0.1"))
 ARBITER_TIMEOUT_SEC: int = int(os.environ.get("ARBITER_TIMEOUT_SEC", "60"))
 ARBITER_MIN_CONFIDENCE: int = int(os.environ.get("ARBITER_MIN_CONFIDENCE", "60"))

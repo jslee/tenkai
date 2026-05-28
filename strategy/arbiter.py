@@ -68,10 +68,57 @@ def _build_orderbook_str(prices: list[int], volumes: list[int]) -> str:
 def _extract_json(text: str) -> dict:
     text = re.sub(r"```(?:json)?", "", text).strip()
     start = text.find("{")
-    end = text.rfind("}") + 1
-    if start == -1 or end == 0:
+    if start == -1:
         raise ValueError("JSON 블록을 찾을 수 없습니다.")
-    return json.loads(text[start:end])
+
+    json_str = text[start:]
+
+    # 1. 일반적인 완결된 JSON 파싱 시도
+    end = json_str.rfind("}") + 1
+    if end > 0:
+        try:
+            return json.loads(json_str[:end])
+        except json.JSONDecodeError:
+            pass
+
+    # 2. 잘린 JSON 복구 시도 (토큰 제한으로 끝이 짤렸을 때)
+    fixes = [
+        "}",
+        '"}',
+        '"} }',
+        '"} }',
+        '"", "dummy": ""}',
+    ]
+    for fix in fixes:
+        try:
+            test_str = json_str + fix
+            test_end = test_str.rfind("}") + 1
+            if test_end > 0:
+                return json.loads(test_str[:test_end])
+        except json.JSONDecodeError:
+            continue
+
+    # 3. 최후의 수단: 정규식을 이용해 파싱 가능한 key-value 만 추출
+    try:
+        recovered = {}
+        # 문자열 매칭
+        str_matches = re.findall(r'"([^"]+)"\s*:\s*"([^"]*?)(?="|,|\s*$)', json_str)
+        for k, v in str_matches:
+            recovered[k] = v
+        # 숫자 매칭
+        num_matches = re.findall(r'"([^"]+)"\s*:\s*([0-9.]+)', json_str)
+        for k, v in num_matches:
+            try:
+                recovered[k] = float(v) if '.' in v else int(v)
+            except ValueError:
+                pass
+
+        if recovered:
+            return recovered
+    except Exception:
+        pass
+
+    raise ValueError("JSON 파싱 및 복구 실패")
 
 
 def _coerce_lm_message_text(value: Any) -> str:
@@ -312,6 +359,16 @@ class Arbiter:
             return {"action": "HOLD", "reason": str(exc)}
 
         try:
+            choices = data.get("choices", [])
+            if choices:
+                finish_reason = choices[0].get("finish_reason", "")
+                if finish_reason == "length":
+                    logger.warning(
+                        "[arbiter] ⚠ 경고: AI 응답이 최대 토큰 수 한도(max_tokens=%d)를 초과하여 중간에 잘렸습니다. "
+                        "일부 데이터는 자동 복구 로직을 통해 복원되었으나 분석 내용이 불완전할 수 있습니다. "
+                        "완전한 응답을 원하시면 config.py의 ARBITER_MAX_TOKENS 값을 늘리세요.",
+                        config.ARBITER_MAX_TOKENS,
+                    )
             raw_text = _extract_lm_response_text(data)
             parsed = _extract_json(raw_text)
         except Exception as exc:
