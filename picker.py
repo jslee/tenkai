@@ -83,7 +83,8 @@ PICKER_PROMPT_TEMPLATE = """당신은 한국 주식 단기 스윙 트레이딩�
     "news": 검색된 뉴스의 핵심 내용과 차트와의 상관관계를 상세히 설명,
     "community": 검색된 커뮤니티의 핵심 내용과 차트와의 상관관계를 상세히 설명,
     "score-reason": 매수 매력도 결정의 근거를 상세히 설명,
-    "timing-reason": 타이밍 판단 근거 및 타이밍에 대비하는 권고사항을 상세히 설명
+    "timing-reason": 타이밍 판단 근거 및 타이밍에 대비하는 권고사항을 상세히 설명,
+    "thinking": thinking process for action
 }}"""
 
 # 세부적인 점수 산정 가이드라인을 제시하는 것이 AI의 능력을 오히려 제한하는 것으로 판단되어 축소하기로 함.
@@ -454,11 +455,8 @@ def _save_report(results: list[dict[str, Any]]) -> None:
         lines.append(
             f"- **타이밍**: {r.get('timing', '')} 시점 ({r.get('timing-reason', '')})"
         )
-        lines.append(f"- **뉴스 분석**:")
-        lines.append(f"  {r.get('news', '')}\n")
-        lines.append(f"- **커뮤니티 분석**:")
-        lines.append(f"  {r.get('community', '')}\n")
-        lines.append("---")
+        lines.append(f"- **뉴스 분석**: {r.get('news', '')}")
+        lines.append(f"- **커뮤니티 분석**: {r.get('community', '')}")
 
     try:
         with open(filepath, "w", encoding="utf-8") as f:
