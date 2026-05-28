@@ -29,6 +29,7 @@ colors:
   rsi: "#ff8c00"
   rsi_overbought: "#d60000"
   rsi_oversold: "#0057d8"
+  rsi_middle: "#111111"
   volume_up: "#d60000"
   volume_down: "#0057d8"
   macd: "#111111"
