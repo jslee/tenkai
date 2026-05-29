@@ -164,7 +164,7 @@ async def simulate_today(ticker: str, target_date: str = None):
         output_dir=Path("charts"),
     )
 
-    logger.info(f"\n[System Prompt]\n{arbiter.system_prompt}\n" + "=" * 80)
+    # logger.info(f"\n[System Prompt]\n{arbiter.system_prompt}\n" + "=" * 80)
 
     last_price = 0
 
@@ -176,7 +176,7 @@ async def simulate_today(ticker: str, target_date: str = None):
         # 새 프롬프트 생성 (로그에서 추출한 데이터를 바탕으로 build_prompt 호출)
         mock_snapshot = create_mock_snapshot(record)
         new_prompt_text = arbiter.build_prompt(mock_snapshot)
-        logger.info(f"\n{new_prompt_text}\n")
+        # logger.info(f"\n{new_prompt_text}\n")
 
         chart_paths_str = record.get("chart_paths", {})
         chart_paths = {}
@@ -194,6 +194,7 @@ async def simulate_today(ticker: str, target_date: str = None):
         # 로그에 기록된 차트 인터벌에 맞춰 Arbiter 설정 동적 업데이트
         arbiter.intervals = tuple(sorted(chart_paths.keys()))
 
+        print("\n")
         logger.info(f"[{ts}] 현재가: {current_price:,}원 | Arbiter에 분석 요청 중...")
 
         decision = await arbiter.ask(new_prompt_text, chart_paths)
