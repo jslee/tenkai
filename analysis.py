@@ -67,6 +67,7 @@ ANALYSIS_PROMPT_TEMPLATE = """당신은 한국 주식 전문 애널리스트입�
    - 현재 구간 진단: 눌림목/돌파 직전/과열/침체 중 하나
    - 매수 타이밍: 즉시/눌림목 대기/돌파 대기/관망 중 하나
    - 매수 진입 조건 (어떤 조건이 충족되면 진입할 것인가)
+   - 보유하고 있다면 어떻게 할 것인가 (매도/추매/관망)
    - 손절 기준가 (기술적 근거 명시)
    - 목표가 1차 / 2차
 
@@ -105,6 +106,7 @@ ANALYSIS_PROMPT_TEMPLATE = """당신은 한국 주식 전문 애널리스트입�
         "current_zone": "눌림목" | "돌파 직전" | "과열" | "침체" | "횡보",
         "entry_condition": "진입 조건 설명",
         "stop_loss": "손절 기준가 또는 기준 설명",
+        "existing": "보유자 대응 방법",
         "target1": "1차 목표가 또는 기준 설명",
         "target2": "2차 목표가 또는 기준 설명"
     }},
@@ -227,6 +229,7 @@ def _print_report(ticker: str, name: str, r: dict[str, Any]) -> None:
         )
         print(f"  진입 조건  : {st.get('entry_condition', '')}")
         print(f"  손절 기준  : {Fore.BLUE}{st.get('stop_loss', '')}{Style.RESET_ALL}")
+        print(f"  보유 전략  : {Fore.BLUE}{st.get('existing', '')}{Style.RESET_ALL}")
         print(f"  목표가 1차 : {Fore.RED}{st.get('target1', '')}{Style.RESET_ALL}")
         print(f"  목표가 2차 : {Fore.RED}{st.get('target2', '')}{Style.RESET_ALL}")
 
