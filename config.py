@@ -169,7 +169,7 @@ MAX_DAILY_LOSS_RATIO: float = float(
     os.environ.get("MAX_DAILY_LOSS_RATIO", "0.05")
 )  # 일일 최대 손실 한도 (5%)
 MAX_TRADES_PER_DAY: int = int(
-    os.environ.get("MAX_TRADES_PER_DAY", "10")
+    os.environ.get("MAX_TRADES_PER_DAY", "20")
 )  # 일일 최대 거래 횟수
 
 # ── ATR 변동성 기반 동적 손/익절 설정 ──────────────────
@@ -218,13 +218,41 @@ STOCK_CODE_DIR: str = os.environ.get(
 ARBITER_BASE_URL: str = os.environ.get(
     "ARBITER_BASE_URL", "http://127.0.0.1:1234/v1/chat/completions"
 )
-ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "google/gemma-4-26b-a4b")
-# ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "google/gemma-4-31b")
-# ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "qwen/qwen3-vl-30b") # 0/1 -11,023
-# ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "qwen/qwen3.6-35b-a3b")
+
+# 🧩 Qwen 3.6의 '눈(Vision)'이 작동하는 방식:
+# 1. 원본 비율 및 픽셀의 무조건 보존
+#   - Qwen 3.6은 입력된 이미지를 억지로 정사각형으로 구겨 넣지 않는다.
+#     1920x1080 해상도가 들어오면 그 16:9 가로 세로 비율을 그대로 유지한 상태에서 내부적으로 필요한 만큼 조각(Patch)을 낸다.
+#   - 이 때문에 주식 차트에서 가장 중요한 시간축(가로)과 가격축(세로)의 왜곡이 전혀 일어나지 않는다.
+# 2. 컨텍스트 윈도우의 체급 차이
+#   - Gemma 4는 이미지 토큰을 1120개로 묶어둔 반면, Qwen 3.6 시리즈는 모델에 따라 최소 26만 토큰에서 최신 Plus/Flash 모델의 경우 최대 100만(1M) 토큰 콘텍스트를 지원합니다.이미지 하나가 정밀하게 쪼개져 4,000~8,000개의 비전 토큰을 소모하더라도, Qwen에게는 전체 콘텍스트 허용량의 1%도 되지 않는 사소한 크기입니다. 구글처럼 서버 비용 때문에 이미지 토큰을 억지로 숨통을 틀어막을 필요가 없는 구조입니다.자동 최적화 (vLLM 및 LM Studio)Qwen 3.6 비전 모델을 API나 LM Studio로 호출할 때는 개발자가 헤드 가이드를 위해 무언가를 지정할 필요가 없습니다. 모델과 엔진(qwen_vl_utils)이 이미지 해상도를 판단하여 글자가 읽히는 최적의 토큰 수로 자동 분할(Dynamic Resolution)해 연산합니다.
+
 # ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "qwen/qwen3.6-27b")
-# ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "zai-org/glm-4.6v-flash")
-ARBITER_MAX_TOKENS: int = int(os.environ.get("ARBITER_MAX_TOKENS", "4096"))
+ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "qwen/qwen3.6-35b-a3b")
+
+# 고해상도 차트 이미지의 정확한 해석은 qwen이 월등히 나은 것으로 판단함
+# ⭐ LM Studio 설정 창을 건드리지 않고, 호출할 때만 고해상도를 켜는 핵심 옵션
+# "max_tokens": 4096,
+# "extra_body": {
+#     "image_token_budget": 1120
+# }
+# 위와 같이 payload에 추가 옵션을 주어도 결국 qwen이 우수함. 왜냐하면:
+# 1. qwen은 처음부터 멀티모달로 학습된 LLM, gemma4는 텍스트로 학습 후 vision 학습을 추가
+# 2. qwen은 이미지를 토큰화하는 과정에서 분할 후 해석해 압축 과정이 없지만,
+#    gemma4는 정사각형 이미지로 일단 압축해 해석함.
+#    image_token_budge을 늘리면 인식 성능이 개선되지만 여전히 qwen을 넘어서진 못함.
+# 3. gemma4는 이미지의 정교한 인식보다는 전체적인 스타일, 분류 등에 유리함
+# 4. 결과로, 주식 차트엔 qwen 3.6
+#
+# 1920x1080 차트 같은 고해상도 이미지는 최소 2,000~4,000개의 비전 토큰으로 쪼개서 봐야
+# 선과 글씨가 안 깨진다.
+# Gemma 4 27B는 최대 한도가 1120개라, 1920x1080 이미지를 강제로 압축(Downsampling)하여 집어넣는다.
+# 이 때문에 체급이 무색하게 캔들의 미세한 꼬리가 뭉개지는 현상이 발생한다.
+#
+# ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "google/gemma-4-26b-a4b")
+# ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "google/gemma-4-31b")
+
+ARBITER_MAX_TOKENS: int = int(os.environ.get("ARBITER_MAX_TOKENS", "8192"))
 ARBITER_TEMPERATURE: float = float(os.environ.get("ARBITER_TEMPERATURE", "0.1"))
 ARBITER_TIMEOUT_SEC: int = int(os.environ.get("ARBITER_TIMEOUT_SEC", "60"))
 ARBITER_MIN_CONFIDENCE: int = int(os.environ.get("ARBITER_MIN_CONFIDENCE", "60"))
