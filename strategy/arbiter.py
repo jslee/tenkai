@@ -109,7 +109,7 @@ def _extract_json(text: str) -> dict:
         num_matches = re.findall(r'"([^"]+)"\s*:\s*([0-9.]+)', json_str)
         for k, v in num_matches:
             try:
-                recovered[k] = float(v) if '.' in v else int(v)
+                recovered[k] = float(v) if "." in v else int(v)
             except ValueError:
                 pass
 
@@ -305,11 +305,11 @@ class Arbiter:
     "confidence": 0~100,
     "analysis": {{
         "thinking": thinking process for action.
-        "trend_context": "5분봉 기준 시장의 배경 (상승/하락/횡보)",
-        "entry_trigger": "1/3분봉에서 발견된 진입 신호 (눌림목/돌파/반등 등)",
+        "trend_context": "시장의 배경 (상승/하락/횡보)",
+        "entry_trigger": "발견된 진입 신호 (눌림목/돌파/반등 등)",
         "orderbook_strength": "체결강도 및 호가 수급의 유효성"
     }},
-    "reason": "최종 결정을 내린 핵심적인 근거 한 문장"
+    "reason": "최종 결정을 내린 근거를 자세히 설명"
 }}""".strip()
 
     # ── LM Studio 호출 ──────────────────────────────────────────────────────
