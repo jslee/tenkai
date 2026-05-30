@@ -151,16 +151,16 @@ CONSEC_BEARISH_BODY_RATIO: float = float(
 )
 
 SINGLE_TRADE_RATIO: float = float(
-    os.environ.get("SINGLE_TRADE_RATIO", "0.2")
+    os.environ.get("SINGLE_TRADE_RATIO", "0.3")
 )  # 1회 진입 매수 비율
 MAX_POSITION_RATIO: float = float(
-    os.environ.get("MAX_POSITION_RATIO", "0.8")
+    os.environ.get("MAX_POSITION_RATIO", "0.9")
 )  # 총 최대 보유 비율
 STOP_LOSS_RATIO: float = float(
     os.environ.get("STOP_LOSS_RATIO", "0.05")
 )  # 손절 비율 (5%)
 TAKE_PROFIT_RATIO: float = float(
-    os.environ.get("TAKE_PROFIT_RATIO", "0.05")
+    os.environ.get("TAKE_PROFIT_RATIO", "0.08")
 )  # 익절 비율 (8%)
 TRAILING_STOP_RATIO: float = float(
     os.environ.get("TRAILING_STOP_RATIO", "0.015")
