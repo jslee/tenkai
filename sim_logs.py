@@ -194,7 +194,7 @@ async def simulate_today(ticker: str, target_date: str = None):
         # 로그에 기록된 차트 인터벌에 맞춰 Arbiter 설정 동적 업데이트
         arbiter.intervals = tuple(sorted(chart_paths.keys()))
 
-        print("\n")
+        print("")
         logger.info(f"[{ts}] 현재가: {current_price:,}원 | Arbiter에 분석 요청 중...")
 
         decision = await arbiter.ask(new_prompt_text, chart_paths)
