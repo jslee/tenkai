@@ -57,13 +57,16 @@ PICKER_PROMPT_TEMPLATE = """당신은 한국 주식 단기 스윙 트레이딩�
   * 차트에 포함된 지표: 캔들,볼린저밴드,RSI,거래량,MACD,EMA(5, 20, 60)
   * 오른쪽 마지막 캔들이 현재 시점입니다.
 
+[기본 지표]
+{core_anchor}
+
 [평가 원칙]
 1. 종목이 내일 당장 진입할 만한 종목인지 평가한다. 
-2. 월봉 → 주봉 → 일봉 순으로 추세를 확인하되, 상위 차트의 추세와 일봉의 단기 움직임 사이의 괴리(Divergence)를 반드시 포착한다.
-3. 특히 최근 5거래일간의 일봉 패턴을 정밀 분석하여, 이것이 상승 추세 속의 '눌림목(Pullback)'인지 아니면 추세가 꺾이는 '추세 전환(Reversal)'인지를 명확히 판별한다.
-4. 하락 시 거래량의 변화를 확인하여 매수세의 이탈 여부를 판단한다 (거래량 없는 하락은 눌림목으로 간주).
-5. 현재 가격이 주요 지지선(EMA 20, 볼린저밴드 중심선 등)에 맞닿아 있는지 확인하여 '눌림목 대기' 또는 '돌파 대기'의 근거로 삼는다.
-6. 추세·모멘텀·거래량·지지저항·지표 수렴/발산을 종합하여 단기 매수 매력도를 0~100점으로 채점한다.
+2. 추세·모멘텀·거래량·지지저항·지표 수렴/발산을 종합하여 단기 매수 매력도를 채점한다.
+3. 월봉 → 주봉 → 일봉 순으로 추세를 확인하되, 상위 차트의 추세와 일봉의 단기 움직임 사이의 괴리(Divergence)를 반드시 포착한다.
+4. 특히 최근 5거래일간의 일봉 패턴을 정밀 분석하여, 이것이 상승 추세 속의 '눌림목(Pullback)'인지 아니면 추세가 꺾이는 '추세 전환(Reversal)'인지를 명확히 판별한다.
+5. 하락 시 거래량의 변화를 확인하여 매수세의 이탈 여부를 판단한다 (거래량 없는 하락은 눌림목으로 간주).
+6. 현재 가격이 주요 지지선(EMA 20, 볼린저밴드 중심선 등)에 맞닿아 있는지 확인하여 '눌림목 대기' 또는 '돌파 대기'의 근거로 삼는다.
 7. 현재 가격이 중장기 이동평균선 대비 과열/침체 구간인지 판단한다.
 8. 매수 타이밍(즉시/눌림목 대기/돌파 대기/관망)을 한 가지로 명시한다.
 9. 현재 눌림목 구간인지, 돌파 직전인지, 관망할 때인지 명확하게 제시하고 판단 근거와 권고사항을 제시한다.
@@ -111,30 +114,8 @@ PICKER_PROMPT_TEMPLATE_0 = """당신은 한국 주식 단기 스윙 트레이딩
 10. 검색된 뉴스가 차트의 변동성이나 향후 방향성에 미칠 영향을 분석하여 최종 판단에 반영한다.
 
 [점수 산정 가이드라인 - 정밀 스코어링]
-모든 점수는 0~100점 사이이며, 아래의 수치적 근거에 따라 소수점 첫째 자리까지 합산한다. (예: 82.7점)
-
-1. 추세 동조화 (30점 만점)
-   - 월/주/일봉 모두 상승 정배열: +30
-   - 상위 차트 대비 일봉의 단기 눌림 발생: +20
-   - 주봉은 상승이나 일봉 역배열(괴리): +10
-   - 전체적 하락 추세 진행 중: 0점 이하
-
-2. 지지 및 저항 근거 (30점 만점)
-   - 주요 이평선(EMA 20, 60) 및 BB 중심선 지지 확인: +30
-   - 돌파 직전의 박스권 상단 위치: +20
-   - 주요 지지선 이탈 및 저항선 근접: +10
-
-3. 거래량 및 모멘텀 (25점 만점)
-   - 하락 시 거래량 급감(매수세 유지): +25
-   - 상승 시 거래량 동반 확인: +15
-   - RSI/MACD 과열 구간 진입: -10
-
-4. 뉴스 및 재료 가중치 (15점 만점)
-   - 강력한 호재(실적, 수주, 테마 편입): +15
-   - 단순 뉴스로 변동성 확대 우려: +5
-   - 악재 또는 불확실성 증가: -15
-
-*주의: 절대 5단위나 10단위로 끊어서 계산하지 마라. 반드시 각 지표의 수치를 반영하여 정밀한 소수점 점수를 산출하라.*
+- 모든 점수는 0~100점 사이이며, 소수점 첫째 자리까지 계산한다. (예: 82.7점)
+- 반드시 지표의 수치와 뉴스, 커뮤니티 정보를 반영하여 정밀한 소수점 점수를 산출하라.
 
 [출력 형식]
 반드시 아래 JSON 하나만 반환하라. 다른 설명은 생략한다.
@@ -149,6 +130,28 @@ PICKER_PROMPT_TEMPLATE_0 = """당신은 한국 주식 단기 스윙 트레이딩
     "thinking": thinking process for action.
 }}"""
 
+# 필요시 [점수 산정 가이드라인]에 추가하여 사용할 것
+# 1. 추세 동조화 (30점 만점)
+#    - 월/주/일봉 모두 상승 정배열: +30
+#    - 상위 차트 대비 일봉의 단기 눌림 발생: +20
+#    - 주봉은 상승이나 일봉 역배열(괴리): +10
+#    - 전체적 하락 추세 진행 중: 0점 이하
+
+# 2. 지지 및 저항 근거 (30점 만점)
+#    - 주요 이평선(EMA 20, 60) 및 BB 중심선 지지 확인: +30
+#    - 돌파 직전의 박스권 상단 위치: +20
+#    - 주요 지지선 이탈 및 저항선 근접: +10
+
+# 3. 거래량 및 모멘텀 (25점 만점)
+#    - 하락 시 거래량 급감(매수세 유지): +25
+#    - 상승 시 거래량 동반 확인: +15
+#    - RSI/MACD 과열 구간 진입: -10
+
+# 4. 뉴스 및 재료 가중치 (15점 만점)
+#    - 강력한 호재(실적, 수주, 테마 편입): +15
+#    - 단순 뉴스로 변동성 확대 우려: +5
+#    - 악재 또는 불확실성 증가: -15
+# *주의: 절대 5단위나 10단위로 끊어서 계산하지 마라. 반드시 각 지표의 수치를 반영하여 정밀한 소수점 점수를 산출하라.*
 
 # ── 유틸 ─────────────────────────────────────────────────────────────────────
 
@@ -253,11 +256,8 @@ async def _build_period_charts(
     ticker: str,
     name: str,
     output_dir: Path,
-) -> dict[str, Path] | None:
-    """일봉/주봉/월봉 차트 PNG를 생성하고 {D/W/M: path} 를 반환한다.
-    데이터를 충분히 가져와 지표를 계산한 후, 지정된 개수만큼만 차트에 그린다.
-    데이터를 가져오지 못하면 None을 반환한다.
-    """
+) -> tuple[dict[str, Path], dict[str, dict[str, float]]] | None:
+    """일봉/주봉/월봉 차트 PNG를 생성하고 {D/W/M: path} 와 기본 지표 요약을 반환한다."""
     import pandas as pd
 
     # (주기코드, 라벨, API조회할데이터개수, 차트에그릴데이터개수)
@@ -268,6 +268,8 @@ async def _build_period_charts(
     ]
 
     paths: dict[str, Path] = {}
+    indicators_summary: dict[str, dict[str, float]] = {}
+
     for period_code, period_label, fetch_count, plot_count in period_configs:
         try:
             if period_code == "D":
@@ -287,6 +289,22 @@ async def _build_period_charts(
         candles_asc = list(reversed(candles))
         df = _build_period_indicator_frame(candles_asc, period_code)
 
+        if not df.empty:
+            last_row = df.iloc[-1]
+            indicators_summary[period_code] = {
+                "close": float(last_row.get("close", 0.0)),
+                "ema_short": float(last_row.get("ema_short", 0.0)),
+                "ema_long": float(last_row.get("ema_long", 0.0)),
+                "ema_trend": float(last_row.get("ema_trend", 0.0)),
+                "bb_upper": float(last_row.get("bb_upper", 0.0)),
+                "bb_mid": float(last_row.get("bb_mid", 0.0)),
+                "bb_lower": float(last_row.get("bb_lower", 0.0)),
+                "rsi": float(last_row.get("rsi", 50.0)),
+                "macd": float(last_row.get("macd", 0.0)),
+                "macd_signal": float(last_row.get("macd_signal", 0.0)),
+                "macd_hist": float(last_row.get("macd_hist", 0.0)),
+            }
+
         # 충분한 데이터로 지표를 계산한 후, 플롯할 개수만큼만 잘라내어 차트를 그립니다.
         if plot_count > 0 and len(df) > plot_count:
             df = df.tail(plot_count).reset_index(drop=True)
@@ -300,7 +318,7 @@ async def _build_period_charts(
 
         await asyncio.sleep(0.3)  # API 호출 간격
 
-    return paths if len(paths) == 3 else None
+    return (paths, indicators_summary) if len(paths) == 3 else None
 
 
 # ── LM Studio 호출 ───────────────────────────────────────────────────────────
@@ -310,9 +328,31 @@ async def _ask_to_picker(
     ticker: str,
     name: str,
     chart_paths: dict[str, Path],
+    indicators_summary: dict[str, dict[str, float]],
 ) -> dict[str, Any]:
     """일봉/주봉/월봉 차트를 LM Studio에 전달하고 채점 결과를 반환한다."""
-    prompt_text = PICKER_PROMPT_TEMPLATE.format(ticker=ticker, name=name)
+    ind_d = indicators_summary.get("D", {})
+    ind_w = indicators_summary.get("W", {})
+    ind_m = indicators_summary.get("M", {})
+
+    core_anchor = (
+        f"일봉 (Daily):\n"
+        f"  - 현재가: {int(ind_d.get('close', 0)):,}원\n"
+        f"  - 이평선 (EMA): [5일: {ind_d.get('ema_short', 0):,.0f} / 20일: {ind_d.get('ema_long', 0):,.0f} / 60일: {ind_d.get('ema_trend', 0):,.0f}]\n"
+        f"  - 볼린저밴드: [상단: {ind_d.get('bb_upper', 0):,.0f} / 기준선: {ind_d.get('bb_mid', 0):,.0f} / 하단: {ind_d.get('bb_lower', 0):,.0f}]\n"
+        f"  - RSI: {ind_d.get('rsi', 50.0):.1f}\n"
+        f"  - MACD: MACD={ind_d.get('macd', 0):+,.1f} / Signal={ind_d.get('macd_signal', 0):+,.1f} / Hist={ind_d.get('macd_hist', 0):+,.1f}\n\n"
+        f"주봉 (Weekly):\n"
+        f"  - 이평선 (EMA): [5주: {ind_w.get('ema_short', 0):,.0f} / 20주: {ind_w.get('ema_long', 0):,.0f} / 60주: {ind_w.get('ema_trend', 0):,.0f}]\n"
+        f"  - RSI: {ind_w.get('rsi', 50.0):.1f}\n\n"
+        f"월봉 (Monthly):\n"
+        f"  - 이평선 (EMA): [5개월: {ind_m.get('ema_short', 0):,.0f} / 20개월: {ind_m.get('ema_long', 0):,.0f} / 60개월: {ind_m.get('ema_trend', 0):,.0f}]\n"
+        f"  - RSI: {ind_m.get('rsi', 50.0):.1f}"
+    )
+
+    prompt_text = PICKER_PROMPT_TEMPLATE.format(
+        ticker=ticker, name=name, core_anchor=core_anchor
+    )
 
     content: list[dict[str, Any]] = [{"type": "text", "text": prompt_text}]
     for period_code, label in [("D", "일봉"), ("W", "주봉"), ("M", "월봉")]:
@@ -353,14 +393,15 @@ async def _ask_to_picker(
                 resp.raise_for_status()
                 data = await resp.json()
     except Exception as exc:
-        logger.error("[%s] AI 호출 실패: %s", ticker, exc)
+        err_msg = str(exc) or type(exc).__name__
+        logger.error("[%s] AI 호출 실패: %s (%s)", ticker, err_msg, type(exc).__name__)
         return {
             "score": 0,
             "timing": "",
             "trend": "",
             "news": "",
             "community": "",
-            "score-reason": str(exc),
+            "score-reason": f"{err_msg} ({type(exc).__name__})",
             "timing-reason": "",
         }
 
@@ -520,13 +561,14 @@ async def _run(args: argparse.Namespace) -> None:
     for idx, (ticker, name) in enumerate(watchlist, 1):
         print(f"[{idx}/{len(watchlist)}] {ticker} {name} — 차트 생성 중...")
 
-        chart_paths = await _build_period_charts(market, ticker, name, output_dir)
-        if chart_paths is None:
+        result = await _build_period_charts(market, ticker, name, output_dir)
+        if result is None:
             print(f"  ⚠ {ticker} 차트 생성 실패 — 건너뜀")
             continue
+        chart_paths, indicators_summary = result
 
         print(f"  → 분석 요청...")
-        decision = await _ask_to_picker(ticker, name, chart_paths)
+        decision = await _ask_to_picker(ticker, name, chart_paths, indicators_summary)
         decision["ticker"] = ticker
         decision["name"] = name
         results.append(decision)
