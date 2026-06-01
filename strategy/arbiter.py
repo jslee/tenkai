@@ -355,11 +355,13 @@ class Arbiter:
                     resp.raise_for_status()
                     data = await resp.json()
         except aiohttp.ClientError as exc:
-            logger.error("[arbiter] HTTP 오류: %s", exc)
-            return {"action": "HOLD", "reason": str(exc)}
+            err_msg = str(exc) or type(exc).__name__
+            logger.error("[arbiter] HTTP 오류: %s (%s)", err_msg, type(exc).__name__)
+            return {"action": "HOLD", "reason": f"{err_msg} ({type(exc).__name__})"}
         except Exception as exc:
-            logger.error("[arbiter] 호출 실패: %s", exc)
-            return {"action": "HOLD", "reason": str(exc)}
+            err_msg = str(exc) or type(exc).__name__
+            logger.error("[arbiter] 호출 실패: %s (%s)", err_msg, type(exc).__name__)
+            return {"action": "HOLD", "reason": f"{err_msg} ({type(exc).__name__})"}
 
         try:
             choices = data.get("choices", [])
