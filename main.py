@@ -178,7 +178,7 @@ class DelphiTrader:
     async def initialize(self) -> None:
         if self.market.is_etf(self.ticker):
             config.TRANSACTION_TAX_RATE = 0.0
-            logger.info("[Init] ETF/ETN 감지 — 거래세 0%% 적용")
+            logger.info("[Init] ETF/ETN 감지 — 거래세 0% 적용")
 
         await self.auth_data.get_token()
         if config.KIS_IS_PAPER:
