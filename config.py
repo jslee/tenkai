@@ -252,7 +252,9 @@ ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "qwen/qwen3.6-35b-a3b")
 # ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "google/gemma-4-26b-a4b")
 # ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "google/gemma-4-31b")
 
-ARBITER_MAX_TOKENS: int = int(os.environ.get("ARBITER_MAX_TOKENS", "8192"))
+ARBITER_MAX_TOKENS: int = int(
+    os.environ.get("ARBITER_MAX_TOKENS", "-1")
+)  # -1이면 최대값, 16384 -> 65536
 ARBITER_TEMPERATURE: float = float(os.environ.get("ARBITER_TEMPERATURE", "0.1"))
-ARBITER_TIMEOUT_SEC: int = int(os.environ.get("ARBITER_TIMEOUT_SEC", "60"))
+ARBITER_TIMEOUT_SEC: int = int(os.environ.get("ARBITER_TIMEOUT_SEC", "120"))
 ARBITER_MIN_CONFIDENCE: int = int(os.environ.get("ARBITER_MIN_CONFIDENCE", "60"))
