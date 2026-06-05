@@ -773,9 +773,9 @@ class KISMarket:
 
         Returns:
             {
-                "ask_prices": [int, ...],    # 매도 1~5호가 (낮은 순)
+                "ask_prices": [int, ...],    # 매도 1~10호가 (낮은 순)
                 "ask_volumes": [int, ...],
-                "bid_prices": [int, ...],    # 매수 1~5호가 (높은 순)
+                "bid_prices": [int, ...],    # 매수 1~10호가 (높은 순)
                 "bid_volumes": [int, ...],
                 "total_ask_vol": int,
                 "total_bid_vol": int,
@@ -803,7 +803,7 @@ class KISMarket:
             output1 = data.get("output1", {})
 
             ask_prices, ask_volumes, bid_prices, bid_volumes = [], [], [], []
-            for i in range(1, 6):
+            for i in range(1, 11):
                 ask_prices.append(int(output1.get(f"askp{i}", 0)))
                 ask_volumes.append(int(output1.get(f"askp_rsqn{i}", 0)))
                 bid_prices.append(int(output1.get(f"bidp{i}", 0)))

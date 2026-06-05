@@ -82,7 +82,7 @@ MARKET_CLOSE_TIME: str = "15:15"
 # ── 오버나이트 및 종료 설정 ─────────────────────────────────────
 # HOLD_OVERNIGHT: True이면 장 마감 시 청산하지 않고 포지션 유지 (오버나이트 허용)
 #               False이면 기존 방식대로 장 마감 전 강제 청산
-HOLD_OVERNIGHT: bool = os.environ.get("HOLD_OVERNIGHT", "false").lower() == "true"
+HOLD_OVERNIGHT: bool = os.environ.get("HOLD_OVERNIGHT", "false").lower() == "false"
 
 # FORCE_CLOSE_ON_EXIT: True이면 프로그램 종료 시(Ctrl+C 등) 미청산 포지션을 강제 청산함.
 #                    False이면 청산하지 않고 그대로 포지션을 유지함 (재시작 시 복구됨).
@@ -195,9 +195,13 @@ MIN_SL_RATIO: float = float(os.environ.get("MIN_SL_RATIO", "0.008"))
 MIN_TP_RATIO: float = float(os.environ.get("MIN_TP_RATIO", "0.015"))
 
 # ── 시장 환경 필터 임계값 ────────────────────────────
-MARKET_DROP_THRESHOLD: float = float(
-    os.environ.get("MARKET_DROP_THRESHOLD", "-5.0")
-)  # 지수 폭락 기준 (%)
+# 지수 폭락 체크는 주식 시장 안정성에 대한 중요한 방어 수단이지만,
+# 저점매수 등을 통해 변동성을 먹는 것이 목적인 만큼, 시장 전체의 폭락으로 매수 기회를 차단하는 것은 타당하지 않다.
+# 최저점에서 거래 중단은 비합리적.
+# 주석 처리하여 더 넓은 매수 범위를 허용한다.
+# MARKET_DROP_THRESHOLD: float = float(
+#     os.environ.get("MARKET_DROP_THRESHOLD", "-5.0")
+# )  # 지수 폭락 기준 (%)
 
 # ── 수수료 설정 ──────────────────────────────────────
 # 매수/매도 양방향 브로커 수수료율 (한국투자증권 기본 0.015%)

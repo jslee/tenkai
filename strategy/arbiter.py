@@ -249,8 +249,8 @@ class Arbiter:
             f"시장 지수 변동률: {snapshot['market_change']:.2f}%\n"
             f"체결강도: {snapshot.get('trade_strength', 0.0):.0f}%\n"
             f"매수잔량비율: {orderbook.get('buy_ratio', 0.5) * 100:.0f}%\n"
-            f"매도호가 상위5(잔량): {_build_orderbook_str(orderbook.get('ask_prices', []), orderbook.get('ask_volumes', []))}\n"
-            f"매수호가 상위5(잔량): {_build_orderbook_str(orderbook.get('bid_prices', []), orderbook.get('bid_volumes', []))}"
+            f"매도호가 상위10(잔량): {_build_orderbook_str(orderbook.get('ask_prices', []), orderbook.get('ask_volumes', []))}\n"
+            f"매수호가 상위10(잔량): {_build_orderbook_str(orderbook.get('bid_prices', []), orderbook.get('bid_volumes', []))}"
         )
 
         # 현재 보유 포지션
@@ -265,17 +265,17 @@ class Arbiter:
             )
 
         # 최근 매도 정보
-        # last_exit = snapshot.get("last_exit_info")
-        # if isinstance(last_exit, dict):
-        #     net_pnl_ratio_pct = float(last_exit.get("net_pnl_ratio_pct", 0.0))
-        #     result_label = "손실" if net_pnl_ratio_pct < 0 else "수익"
-        #     last_exit_text = (
-        #         f"매도 시간: {last_exit.get('exit_time', 'N/A').replace('T', ' ')}\n"
-        #         f"매도 가격: {int(last_exit.get('exit_price', 0)):,}원\n"
-        #         f"결과: {net_pnl_ratio_pct:+.2f}% ({result_label})"
-        #     )
-        # else:
-        #     last_exit_text = "없음 (청산 이력 없음)"
+        last_exit = snapshot.get("last_exit_info")
+        if isinstance(last_exit, dict):
+            net_pnl_ratio_pct = float(last_exit.get("net_pnl_ratio_pct", 0.0))
+            result_label = "손실" if net_pnl_ratio_pct < 0 else "수익"
+            last_exit_text = (
+                f"매도 시간: {last_exit.get('exit_time', 'N/A').replace('T', ' ')}\n"
+                f"매도 가격: {int(last_exit.get('exit_price', 0)):,}원\n"
+                f"결과: {net_pnl_ratio_pct:+.2f}% ({result_label})"
+            )
+        else:
+            last_exit_text = "없음 (청산 이력 없음)"
 
         # 제세금 및 수수료를 계산한다. ETF는 0.
         cost_ratio = (
@@ -293,6 +293,9 @@ class Arbiter:
 
 [보유 포지션]
 {position_text}
+
+[최근 매도 정보]
+{last_exit_text}
 
 [제세금 및 수수료]
 {cost_ratio:.3}%

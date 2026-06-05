@@ -45,26 +45,31 @@ def gate_market_filter(market_data: dict) -> tuple[bool, dict]:
     passed = True
     halt_trading_today = False
 
-    # ── 1. 지수 폭락 체크 (-2.0% 등) ──────────────────────────────────────
-    market_change: float = market_data.get("market_change", 0.0)
-    market_name = config.MARKET.upper()
-    if market_change <= config.MARKET_DROP_THRESHOLD:
-        checks.append(
-            {
-                "check": "market_change",
-                "passed": False,
-                "detail": f"{market_name} 폭락 ({market_change:.2f}% <= {config.MARKET_DROP_THRESHOLD}%)",
-            }
-        )
-        passed = False
-    else:
-        checks.append(
-            {
-                "check": "market_change",
-                "passed": True,
-                "detail": f"{market_name} 정상 ({market_change:.2f}%)",
-            }
-        )
+    # ── 1. 지수 폭락 체크 ──────────────────────────────────────
+    # 지수 폭락 체크는 주식 시장 안정성에 대한 중요한 방어 수단이지만,
+    # 변동성을 먹는 것이 목적인 만큼, 시장 전체의 폭락으로 매수 기회를 차단하는 것은 타당하지 않다.
+    # 최저점에서 거래 중단은 비합리적.
+    # 주석 처리하여 더 넓은 매수 범위를 허용한다.
+    #
+    # market_change: float = market_data.get("market_change", 0.0)
+    # market_name = config.MARKET.upper()
+    # if market_change <= config.MARKET_DROP_THRESHOLD:
+    #     checks.append(
+    #         {
+    #             "check": "market_change",
+    #             "passed": False,
+    #             "detail": f"{market_name} 폭락 ({market_change:.2f}% <= {config.MARKET_DROP_THRESHOLD}%)",
+    #         }
+    #     )
+    #     passed = False
+    # else:
+    #     checks.append(
+    #         {
+    #             "check": "market_change",
+    #             "passed": True,
+    #             "detail": f"{market_name} 정상 ({market_change:.2f}%)",
+    #         }
+    #     )
 
     # ── 3. 거래량 확인 (거래 활성 여부) ──────────────────────────────────
     # 누적 거래량 vs 20일 평균 비교는 일중 분포(U자 패턴)로 인해 시간대별 편향이 크다.
