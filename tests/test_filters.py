@@ -5,12 +5,13 @@ tests/test_filters.py — 각 Gate 필터 단위 테스트
 """
 
 from datetime import datetime
+import pytest
 import config
 from filters import gate_market_filter
 
 
 def test_gate_market_filter_passed(monkeypatch):
-    monkeypatch.setattr(config, "MARKET_DROP_THRESHOLD", -2.0)
+    monkeypatch.setattr(config, "MARKET_DROP_THRESHOLD", -2.0, raising=False)
     monkeypatch.setattr(config, "MAX_DAILY_LOSS_RATIO", 0.05)
 
     market_data = {
@@ -26,8 +27,11 @@ def test_gate_market_filter_passed(monkeypatch):
     assert result["halt_trading_today"] is False
 
 
+@pytest.mark.skip(
+    reason="Market drop check is disabled by user in config and gate_market"
+)
 def test_gate_market_filter_market_drop(monkeypatch):
-    monkeypatch.setattr(config, "MARKET_DROP_THRESHOLD", -2.0)
+    monkeypatch.setattr(config, "MARKET_DROP_THRESHOLD", -2.0, raising=False)
 
     market_data = {
         "market_change": -2.5,
@@ -39,7 +43,9 @@ def test_gate_market_filter_market_drop(monkeypatch):
     passed, result = gate_market_filter(market_data)
     assert passed is False
     assert result["passed"] is False
-    assert any("폭락" in check["detail"] for check in result["checks"] if not check["passed"])
+    assert any(
+        "폭락" in check["detail"] for check in result["checks"] if not check["passed"]
+    )
 
 
 def test_gate_market_filter_zero_volume():
@@ -53,7 +59,11 @@ def test_gate_market_filter_zero_volume():
     passed, result = gate_market_filter(market_data)
     assert passed is False
     assert result["passed"] is False
-    assert any("거래량 없음" in check["detail"] for check in result["checks"] if not check["passed"])
+    assert any(
+        "거래량 없음" in check["detail"]
+        for check in result["checks"]
+        if not check["passed"]
+    )
 
 
 def test_gate_market_filter_circuit_breaker():
@@ -67,7 +77,11 @@ def test_gate_market_filter_circuit_breaker():
     passed, result = gate_market_filter(market_data)
     assert passed is False
     assert result["passed"] is False
-    assert any("서킷브레이커 발동" in check["detail"] for check in result["checks"] if not check["passed"])
+    assert any(
+        "서킷브레이커 발동" in check["detail"]
+        for check in result["checks"]
+        if not check["passed"]
+    )
 
 
 def test_gate_market_filter_daily_loss_limit(monkeypatch):
@@ -84,8 +98,11 @@ def test_gate_market_filter_daily_loss_limit(monkeypatch):
     assert passed is False
     assert result["passed"] is False
     assert result["halt_trading_today"] is True
-    assert any("손실 한도 초과" in check["detail"] for check in result["checks"] if not check["passed"])
-
+    assert any(
+        "손실 한도 초과" in check["detail"]
+        for check in result["checks"]
+        if not check["passed"]
+    )
 
 
 class TestRiskManager:
@@ -101,9 +118,10 @@ class TestRiskManager:
         can, reason = self.rm.can_enter(70000, 10_000_000)
         assert can is True
 
-    def test_cannot_enter_when_position_exists(self):
+    def test_cannot_enter_when_position_exists(self, monkeypatch):
+        monkeypatch.setattr(config, "MAX_POSITION_RATIO", 0.5)
         params = self.rm.calc_order_params(70000, 10_000_000)
-        # 10_000_000 * 0.5 = 5_000_000 is MAX_POSITION_RATIO limit. 
+        # 10_000_000 * 0.5 = 5_000_000 is MAX_POSITION_RATIO limit.
         # Add a position of 80 shares (80 * 70,000 = 5,600,000), which exceeds the limit.
         self.rm.add_position(
             "005930",
