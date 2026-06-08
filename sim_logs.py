@@ -1,3 +1,6 @@
+from datetime import timedelta
+from pandas._libs.tslibs import timedeltas
+from pandas.core import window
 import argparse
 import asyncio
 import json
@@ -124,6 +127,9 @@ async def simulate_today(ticker: str, target_date: str = None):
     if not log_file.exists():
         logger.error(f"로그 파일이 존재하지 않습니다: {log_file}")
         return
+
+    # 시뮬레이션 중간에 장시간을 초과해 강제청산되지 않도록 None으로 설정
+    config.MARKET_CLOSE_TIME = None
 
     today_str = target_date if target_date else datetime.now().strftime("%Y-%m-%d")
     cycles = []
