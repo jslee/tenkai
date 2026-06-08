@@ -536,7 +536,7 @@ class RiskManager:
 
         Returns:
             {
-                "action": str,        # 'HOLD' | 'STOP_LOSS' | 'TAKE_PROFIT' | 'TRAILING_STOP' | 'FORCE_CLOSE_MARKET' | 'FORCE_CLOSE_DAILY_LOSS'
+                "action": str, # HOLD | STOP_LOSS | TAKE_PROFIT | TRAILING_STOP | FORCE_CLOSE_MARKET | FORCE_CLOSE_DAILY_LOSS
                 "reason": str,
                 "position": Position | None,
             }
@@ -549,7 +549,17 @@ class RiskManager:
 
         # ── 1. 장 마감 강제 청산 ─────────────────────────────────────────
         # HOLD_OVERNIGHT가 False일 때만 장 마감 전 강제 청산을 수행한다.
-        if not config.HOLD_OVERNIGHT and now.time() >= _MARKET_CLOSE_TIME:
+        # HOLD_OVERNIGHT 체크 시 포지션 방향을 확인하지 않는 이유:
+        # 1. 포지션 방향과 무관한 리스크 회피:
+        #  - 포지션이 BUY든, SELL이든 상관없이 장 마감시 모든 포지션을 동일하게 청산
+        # 2. 양방향 포지션 설계 지원
+        #  - 현재 BUY 포지션만 거래하고 있지만, risk.py 내의 다른 메서드들은 SELL일 때의 숏 수익 계산식도 함께 구현됨.
+        #  - 따라서 나중에 숏 포지션 기능이 활성화되도 장 마감 청산 로직이 정상적으로 작동할 수 있도록 방향 체크 없이 구현됨.
+        if (
+            not config.HOLD_OVERNIGHT
+            and _MARKET_CLOSE_TIME is not None
+            and now.time() >= _MARKET_CLOSE_TIME
+        ):
             logger.warning("[RiskManager] 장 마감 강제 청산: %s", pos.ticker)
             return {
                 "action": "FORCE_CLOSE_MARKET",
@@ -582,7 +592,7 @@ class RiskManager:
                 }
 
         # ── 4. 손절 ──────────────────────────────────────────────────────
-        if current_price <= pos.stop_loss:
+        if pos.direction == "BUY" and current_price <= pos.stop_loss:
             logger.warning(
                 "[RiskManager] 손절 발동: 현재가=%d <= 손절가=%.0f",
                 current_price,
@@ -594,8 +604,8 @@ class RiskManager:
                 "position": pos,
             }
 
-        # ── 3. 익절가 도달 → 트레일링 스탑 전환 ──────────────────────────
-        if current_price >= pos.take_profit:
+        # ── 5. 익절가 도달 → 트레일링 스탑 전환 ──────────────────────────
+        if pos.direction == "BUY" and current_price >= pos.take_profit:
             new_trailing = current_price * (1 - config.TRAILING_STOP_RATIO)
             if not pos.trailing_active:
                 pos.trailing_active = True
@@ -614,9 +624,10 @@ class RiskManager:
                     pos.trailing_stop,
                 )
 
-        # ── 4. 트레일링 스탑 발동 ─────────────────────────────────────────
+        # ── 5.1 트레일링 스탑 발동 ─────────────────────────────────────────
         if (
-            pos.trailing_active
+            pos.direction == "BUY"
+            and pos.trailing_active
             and pos.trailing_stop
             and current_price <= pos.trailing_stop
         ):
