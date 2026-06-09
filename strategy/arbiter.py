@@ -17,7 +17,9 @@ import numpy as np
 
 import config
 from kis_api.market import KISMarket
+
 from strategy.indicators import _ema
+from strategy.indicators import calc_rsi
 
 if TYPE_CHECKING:
     from strategy.risk import RiskManager
@@ -225,22 +227,60 @@ class Arbiter:
                 .get("analysis_candles", [])
             )
         ]
+        closes_5m = [
+            float(c["close"])
+            for c in reversed(
+                snapshot.get("interval_snapshots", {})
+                .get(5, {})
+                .get("analysis_candles", [])
+            )
+        ]
         ema_1m = {
             5: indicators.get("ema_short", 0.0),
             20: indicators.get("ema_long", 0.0),
-            30: _ema(closes_1m, 30)[-1] if len(closes_1m) >= 30 else 0.0,
+            # 30: _ema(closes_1m, 30)[-1] if len(closes_1m) >= 30 else 0.0,
             60: _ema(closes_1m, 60)[-1] if len(closes_1m) >= 60 else 0.0,
         }
         ema_3m = {
+            5: _ema(closes_3m, 5)[-1] if len(closes_3m) >= 5 else 0.0,
             20: _ema(closes_3m, 20)[-1] if len(closes_3m) >= 20 else 0.0,
             60: _ema(closes_3m, 60)[-1] if len(closes_3m) >= 60 else 0.0,
         }
+        ema_5m = {
+            5: _ema(closes_5m, 5)[-1] if len(closes_5m) >= 5 else 0.0,
+            20: _ema(closes_5m, 20)[-1] if len(closes_5m) >= 20 else 0.0,
+            60: _ema(closes_5m, 60)[-1] if len(closes_5m) >= 60 else 0.0,
+        }
+
+        rsi_1m = calc_rsi(closes_1m)
+        rsi_3m = calc_rsi(closes_3m)
+        rsi_5m = calc_rsi(closes_5m)
 
         # 그래프로 인식하는 것보다 정확한 수치로 제시하는 것이 판단에 더 도움이 될 것.
-        core_anchor = (
-            f"1m EMA: [5: {ema_1m[5]:,.0f} / 20: {ema_1m[20]:,.0f} / 30: {ema_1m[30]:,.0f} / 60: {ema_1m[60]:,.0f}]\n"
-            f"3m EMA: [20: {ema_3m[20]:,.0f} / 60: {ema_3m[60]:,.0f}]\n"
-            f"1m RSI: {indicators.get('rsi', 0.0):.0f}\n"
+        core_anchor = ""
+        core_anchor += (
+            f"1m EMA: [5: {ema_1m[5]:,.0f} / 20: {ema_1m[20]:,.0f} / 60: {ema_1m[60]:,.0f}]\n"
+            if 1 in self.intervals
+            else ""
+        )
+        core_anchor += (
+            f"3m EMA: [5: {ema_3m[5]:,.0f} / 20: {ema_3m[20]:,.0f} / 60: {ema_3m[60]:,.0f}]\n"
+            if 3 in self.intervals
+            else ""
+        )
+        core_anchor += (
+            f"5m EMA: [5: {ema_5m[5]:,.0f} / 20: {ema_5m[20]:,.0f} / 60: {ema_5m[60]:,.0f}]\n"
+            if 5 in self.intervals
+            else ""
+        )
+        core_anchor += (
+            f"1m RSI: {rsi_1m.get('rsi', 0.0):.0f}\n" if 1 in self.intervals else ""
+        )
+        core_anchor += (
+            f"3m RSI: {rsi_3m.get('rsi', 0.0):.0f}\n" if 3 in self.intervals else ""
+        )
+        core_anchor += (
+            f"5m RSI: {rsi_5m.get('rsi', 0.0):.0f}\n" if 5 in self.intervals else ""
         )
 
         # 시장지수 및 호가창

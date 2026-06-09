@@ -173,7 +173,8 @@ MAX_TRADES_PER_DAY: int = int(
 )  # 일일 최대 거래 횟수
 
 # ── ATR 변동성 기반 동적 손/익절 설정 ──────────────────
-USE_ATR_STOP: bool = os.environ.get("USE_ATR_STOP", "true").lower() == "true"
+# 동적 손익절 일체를 사용하지 않고, 고정 비율을 적용한다.
+USE_ATR_STOP: bool = os.environ.get("USE_ATR_STOP", "false").lower() == "true"
 ATR_SL_MULTIPLIER: float = float(os.environ.get("ATR_SL_MULTIPLIER", "3.0"))
 # 손절 = 진입가 - (ATR × ATR_SL_MULTIPLIER).
 # 가드레일: 최소 MIN_SL_RATIO(0.5%).

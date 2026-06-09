@@ -51,7 +51,8 @@ from strategy import (
 logger = logging.getLogger(__name__)
 
 
-DECISION_INTERVALS = (1, 3, 5)
+# DECISION_INTERVALS = (1, 3, 5)
+DECISION_INTERVALS = (3, 5)  # 노이즈가 심한 1분봉 차트는 제외
 DECISION_LOOP_INTERVAL_SEC = 60
 
 
