@@ -105,7 +105,7 @@ def parse_args() -> argparse.Namespace:
 def set_title(ticker: str, stock_name: str, mode: str) -> None:
     import platform
 
-    title_str = f"{stock_name}({ticker})-LMStudio-1m3m5m-{mode}"
+    title_str = f"{stock_name}({ticker})-{mode}"
     try:
         if sys.stdout.isatty():
             system = platform.system()
