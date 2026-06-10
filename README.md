@@ -52,7 +52,7 @@ ARBITER_MODEL=google/gemma-4-26b-a4b
 
 ## main.py — 자동매매
 
-1분 주기로 시장 환경을 필터링하고, 차트(1분/3분/5분봉)를 LM Studio에 전달하여 BUY/SELL/HOLD 판단을 받아 주문을 실행한다.
+1분 주기로 시장 환경을 필터링하고, 차트(3분/5분봉)를 LM Studio에 전달하여 BUY/SELL/HOLD 판단을 받아 주문을 실행한다. (1분봉은 노이즈와 지연 시간 왜곡 방지를 위해 제외)
 
 ### 실행
 
@@ -90,10 +90,10 @@ python main.py --ticker 005930 --once
 gate (시장 환경 필터)
   - 거래 시간 / 지수 급락 / 서킷브레이커 / 일일 손실 한도 체크
   ↓
-차트 생성 (1분봉 / 3분봉 / 5분봉 PNG)
+차트 생성 (3분봉 / 5분봉 PNG)
   ↓
 LM Studio arbiter 호출
-  - 입력: 차트 3장 + 가격/호가/지표 텍스트
+  - 입력: 차트 2장 + 가격/호가/지표 텍스트
   - 출력: {"action": "BUY|SELL|HOLD", "reason": "..."}
   ↓
 주문 실행 / 포지션 관리
@@ -109,13 +109,13 @@ LM Studio arbiter 호출
 
 | 항목 | 기본값 | 설명 |
 |---|---|---|
-| 손절 | ATR × 3.0 | 최소 0.8% 이상 |
-| 익절 | ATR × 3.0 | 최소 1.5% 이상 |
+| 손절 | 5% (고정 비율) | `USE_ATR_STOP`이 false이므로 고정 비율 적용 (True 설정시 ATR × 3.0, 최소 0.8% 이상) |
+| 익절 | 8% (고정 비율) | `USE_ATR_STOP`이 false이므로 고정 비율 적용 (True 설정시 ATR × 3.0, 최소 1.5% 이상) |
 | 트레일링 스탑 | 1.5% | 고점 대비 |
 | 일일 최대 손실 | 5% | 초과 시 당일 거래 중단 |
-| 일일 최대 거래 횟수 | 5회 | |
-| 손절 후 재진입 쿨다운 | 10분 | |
-| 1회 매수 비율 | 10% | 총 자산 대비 |
+| 일일 최대 거래 횟수 | 20회 | |
+| 손절 후 재진입 쿨다운 | 20분 | |
+| 1회 매수 비율 | 30% | 총 자산 대비 |
 
 ---
 
@@ -291,16 +291,16 @@ HOLD_OVERNIGHT=false          # true: 오버나이트 허용
 FORCE_CLOSE_ON_EXIT=true      # 프로그램 종료 시 포지션 강제 청산
 
 # 리스크
-USE_ATR_STOP=true
+USE_ATR_STOP=false            # 고정 비율 손익절 사용
 ATR_SL_MULTIPLIER=3.0
 ATR_TP_MULTIPLIER=3.0
 MIN_SL_RATIO=0.008
 MIN_TP_RATIO=0.015
 TRAILING_STOP_RATIO=0.015
 MAX_DAILY_LOSS_RATIO=0.05
-MAX_TRADES_PER_DAY=5
-STOP_LOSS_COOLDOWN_MINUTES=10
-MAX_POSITION_RATIO=0.5
+MAX_TRADES_PER_DAY=20
+STOP_LOSS_COOLDOWN_MINUTES=20
+MAX_POSITION_RATIO=0.9
 
 # LM Studio
 ARBITER_BASE_URL=http://127.0.0.1:1234/v1/chat/completions

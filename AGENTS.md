@@ -77,13 +77,13 @@ KIS: 현재가/분봉/호가/체결강도/지수/잔고
     |
     v
 [지표/차트 준비]
-- 1/3/5분봉 리샘플링
+- 3/5분봉 리샘플링 (노이즈가 심한 1분봉 제외)
 - RSI, BB, MACD, ATR 계산
 - 차트 PNG 생성
     |
     v
 [arbiter] LM Studio 판정
-- 입력: 차트 3장 + 가격/호가/시장텍스트
+- 입력: 차트 2장 (3분봉, 5분봉) + 가격/호가/시장텍스트
 - 출력: {"action": "BUY|SELL|HOLD", "reason": "..."}
     |
     v
@@ -162,7 +162,7 @@ python main.py --ticker 005930 --once --real
 - CONSEC_BEARISH_* (연속 음봉 선제 청산)
 - MAX_POSITION_RATIO, STOP_LOSS_RATIO, TAKE_PROFIT_RATIO, TRAILING_STOP_RATIO
 - MAX_DAILY_LOSS_RATIO, MAX_TRADES_PER_DAY
-- USE_ATR_STOP, ATR_SL_MULTIPLIER, ATR_TP_MULTIPLIER, MIN_SL_RATIO, MIN_TP_RATIO
+- USE_ATR_STOP (기본값 False - 고정 비율 손익절 사용), ATR_SL_MULTIPLIER, ATR_TP_MULTIPLIER, MIN_SL_RATIO, MIN_TP_RATIO
 
 ### 기타
 
@@ -210,7 +210,7 @@ def gate_market_filter(market_data: dict) -> tuple[bool, dict]
 
 입력:
 
-1. 1분/3분/5분 차트 PNG
+1. 3분/5분 차트 PNG (노이즈 방지를 위해 1분봉 제외)
 2. 가격/호가/체결강도/시장 정보 텍스트
 3. 지표 요약 텍스트
 
@@ -244,8 +244,8 @@ def gate_market_filter(market_data: dict) -> tuple[bool, dict]
 진입 시:
 
 - 수량 = floor(total_assets * MAX_POSITION_RATIO / current_price)
-- SL/TP는 ATR 기반(USE_ATR_STOP) 또는 고정 비율 사용
-- 최소/최대 가드레일(MIN_SL_RATIO, MIN_TP_RATIO) 적용
+- SL/TP는 기본적으로 고정 비율 사용 (USE_ATR_STOP = False가 기본이며 손절 5%, 익절 8% 적용. True 설정 시에만 ATR 기반 동적 손절 적용)
+- 최소/최대 가드레일(MIN_SL_RATIO, MIN_TP_RATIO) 적용 (ATR 기반 설정 시에만 작동)
 
 보유 중:
 
@@ -264,7 +264,7 @@ def gate_market_filter(market_data: dict) -> tuple[bool, dict]
 ## 9. 로깅 규칙
 
 파일: logger/trade_log.py
-형식: JSONL, 종목별 파일 logs/trades_{ticker}.jsonl
+형식: JSONL, 종목별 파일 logs/trades_<ticker>.jsonl
 
 사이클 로그 키:
 
@@ -314,8 +314,7 @@ python status.py --interval 10 --paper
 ### make_charts.py
 
 - 지표 프레임 생성
-- 1/3/5분봉 차트 PNG 렌더링
-- main.py의 arbiter 입력용 차트 생성에 사용
+- 3/5분봉 차트 PNG 렌더링 (설정에 따라 1분봉도 가능하나 main.py의 arbiter 입력용으로는 기본 3m, 5m 차트 생성에 사용)
 
 ---
 
