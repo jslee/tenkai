@@ -75,19 +75,19 @@ CANDLE_INTERVAL: int = int(os.environ.get("CANDLE_INTERVAL", "1"))
 #
 # 진입 가능 시작 시각 (장 시작 직후 갭 변동 회피-> +5분)
 MARKET_OPEN_TIME: str = "09:05"
-# 장 마감 강제 청산 시각 (HOLD_OVERNIGHT=False 시 미청산 포지션 강제 청산)
+# 장 마감 시각 (HOLD_OVERNIGHT=False 시 미청산 포지션 강제 청산)
 MARKET_CLOSE_TIME: str = "15:15"
 
 
 # ── 오버나이트 및 종료 설정 ─────────────────────────────────────
 # HOLD_OVERNIGHT: True이면 장 마감 시 청산하지 않고 포지션 유지 (오버나이트 허용)
 #               False이면 기존 방식대로 장 마감 전 강제 청산
-HOLD_OVERNIGHT: bool = os.environ.get("HOLD_OVERNIGHT", "false").lower() == "false"
+HOLD_OVERNIGHT: bool = os.environ.get("HOLD_OVERNIGHT", "true").lower() == "true"
 
 # FORCE_CLOSE_ON_EXIT: True이면 프로그램 종료 시(Ctrl+C 등) 미청산 포지션을 강제 청산함.
 #                    False이면 청산하지 않고 그대로 포지션을 유지함 (재시작 시 복구됨).
 FORCE_CLOSE_ON_EXIT: bool = (
-    os.environ.get("FORCE_CLOSE_ON_EXIT", "true").lower() == "true"
+    os.environ.get("FORCE_CLOSE_ON_EXIT", "false").lower() == "true"
 )
 
 # ── 지표 계산 파라미터 ───────────────────────────────
