@@ -141,7 +141,7 @@ VELOCITY_STOP_DOWN_TICK_RATIO: float = float(
 # ── 연속 음봉 선제 청산 (Band Walk 대응) ─────────────────
 # 최근 N봉이 모두 일정 몸통 비율 이상의 음봉이면 강한 하락 추세로 판단해 선제 청산한다.
 CONSEC_BEARISH_STOP_ENABLED: bool = (
-    os.environ.get("CONSEC_BEARISH_STOP_ENABLED", "false").lower() == "true"
+    os.environ.get("CONSEC_BEARISH_STOP_ENABLED", "true").lower() == "true"
 )
 # 선제 청산을 발동하는 연속 음봉 최소 개수
 CONSEC_BEARISH_COUNT: int = int(os.environ.get("CONSEC_BEARISH_COUNT", "3"))
@@ -174,7 +174,7 @@ MAX_TRADES_PER_DAY: int = int(
 
 # ── ATR 변동성 기반 동적 손/익절 설정 ──────────────────
 # 동적 손익절 일체를 사용하지 않고, 고정 비율을 적용한다.
-USE_ATR_STOP: bool = os.environ.get("USE_ATR_STOP", "false").lower() == "true"
+USE_ATR_STOP: bool = os.environ.get("USE_ATR_STOP", "true").lower() == "true"
 ATR_SL_MULTIPLIER: float = float(os.environ.get("ATR_SL_MULTIPLIER", "3.0"))
 # 손절 = 진입가 - (ATR × ATR_SL_MULTIPLIER).
 # 가드레일: 최소 MIN_SL_RATIO(0.5%).
