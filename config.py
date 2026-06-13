@@ -187,7 +187,7 @@ ATR_TP_MULTIPLIER: float = float(os.environ.get("ATR_TP_MULTIPLIER", "3.0"))
 # ATR 기반 SL 최소 하한선 (진입가 대비 비율).
 # 저변동성 구간에서 ATR이 극도로 작아지면 SL이 호가 노이즈 수준(0.1% 등)으로
 # 설정되어 진입 직후 손절되는 문제를 방지.
-# 예) 0.005 → SL이 최소 진입가의 0.5% 이상 떨어져야 함. (사용자 요청에 따라 0.008 등으로 조정 가능)
+# 예) 0.008 → SL이 최소 진입가의 0.8% 이상 떨어져야 함.
 MIN_SL_RATIO: float = float(os.environ.get("MIN_SL_RATIO", "0.008"))
 
 # ATR 기반 TP 최소 하한선 (진입가 대비 비율).
