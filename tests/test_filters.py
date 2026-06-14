@@ -143,7 +143,9 @@ class TestRiskManager:
 
     def test_stop_loss_price(self, monkeypatch):
         monkeypatch.setattr(config, "STOP_LOSS_RATIO", 0.02)
-        params = self.rm.calc_order_params(current_price=70000, total_assets=10_000_000)
+        params = self.rm.calc_order_params(
+            current_price=70000, total_assets=10_000_000, atr=300.0
+        )
         assert abs(params["stop_loss"] - 70000 * 0.98) < 1
 
     def test_take_profit_price(self, monkeypatch):

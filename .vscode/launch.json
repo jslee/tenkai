@@ -46,6 +46,17 @@
                 "tests/test_filters.py::TestGate3ClaudeFilter::test_pass_high_confidence_buy_with_candle_pattern",
                 "-v"
             ]
+        },
+        {
+            "name": "Test Stop Loss",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "tests/test_filters.py::TestRiskManager::test_stop_loss_price",
+                "-v"
+            ]
         }
+
     ]
 }

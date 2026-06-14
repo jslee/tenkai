@@ -269,8 +269,8 @@ class RiskManager:
         max_sl_limit = current_price * (1 - config.STOP_LOSS_RATIO)
         max_tp_limit = current_price * (1 + config.TAKE_PROFIT_RATIO)
 
-        stop_loss = max_sl_limit
-        take_profit = max_tp_limit
+        stop_loss = max_sl_limit  # cp * (1 - 0.05) = cp * 0.95
+        take_profit = max_tp_limit  # cp * (1 + 0.08) = cp * 1.08
 
         # ATR 변동성 기반 동적 손/익절가 적용
         if config.USE_ATR_STOP and atr > 0:
