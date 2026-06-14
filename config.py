@@ -175,10 +175,10 @@ MAX_TRADES_PER_DAY: int = int(
 # ── ATR 변동성 기반 동적 손/익절 설정 ──────────────────
 # 동적 손익절 일체를 사용하지 않고, 고정 비율을 적용한다.
 USE_ATR_STOP: bool = os.environ.get("USE_ATR_STOP", "true").lower() == "true"
-ATR_SL_MULTIPLIER: float = float(os.environ.get("ATR_SL_MULTIPLIER", "3.0"))
+ATR_SL_MULTIPLIER: float = float(os.environ.get("ATR_SL_MULTIPLIER", "5.0"))
 # 손절 = 진입가 - (ATR × ATR_SL_MULTIPLIER).
 # 가드레일: 최소 MIN_SL_RATIO(0.5%).
-ATR_TP_MULTIPLIER: float = float(os.environ.get("ATR_TP_MULTIPLIER", "3.0"))
+ATR_TP_MULTIPLIER: float = float(os.environ.get("ATR_TP_MULTIPLIER", "5.0"))
 # 익절 = 진입가 + (ATR × ATR_TP_MULTIPLIER).
 # ×3 설정 배경: TP 도달 빈도를 높여 트레일링 스탑 전환 기회를 확보.
 #   TP×4 대비 TP 근접 실패 빈도가 낮아지고, 트레일링으로 추가 수익도 유지 가능.
