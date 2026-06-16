@@ -146,6 +146,7 @@ CONSEC_BEARISH_STOP_ENABLED: bool = (
 # 선제 청산을 발동하는 연속 음봉 최소 개수
 CONSEC_BEARISH_COUNT: int = int(os.environ.get("CONSEC_BEARISH_COUNT", "3"))
 # 각 음봉의 몸통 비율 하한 (전체 고저 범위 대비). 꼬리 긴 음봉은 제외.
+
 CONSEC_BEARISH_BODY_RATIO: float = float(
     os.environ.get("CONSEC_BEARISH_BODY_RATIO", "0.5")
 )
