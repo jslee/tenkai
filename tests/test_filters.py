@@ -1,7 +1,9 @@
 """
 tests/test_filters.py — 각 Gate 필터 단위 테스트
 
-실행: python -m pytest tests/ -v
+실행:
+python -m pytest tests/ -v
+python -m pytest tests/test_filters.py -k test_stop_loss_price -s --log-cli-level=INFO
 """
 
 from datetime import datetime
