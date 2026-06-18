@@ -178,13 +178,23 @@ class KISMarket:
                     data = await resp.json()
 
             output = data["output"]
+            acml_vol = int(output["acml_vol"])
+            acml_amt = int(output["acml_tr_pbmn"]) if output.get("acml_tr_pbmn") else 0
+            wavg_price = float(output["wghn_avrg_prc"]) if output.get("wghn_avrg_prc") else 0.0
+            
+            # 장외/휴일 등의 이유로 가중평균가가 0인 경우 누적 거래대금/거래량으로 대체 계산
+            if wavg_price <= 0 and acml_vol > 0 and acml_amt > 0:
+                wavg_price = float(acml_amt) / float(acml_vol)
+
             return {
                 "current_price": int(output["stck_prpr"]),
                 "change_rate": float(output["prdy_ctrt"]),
-                "volume": int(output["acml_vol"]),
+                "volume": acml_vol,
                 "open_price": int(output["stck_oprc"]),
                 "high_price": int(output["stck_hgpr"]),
                 "low_price": int(output["stck_lwpr"]),
+                "wavg_price": wavg_price,
+                "acml_amt": acml_amt,
             }
         except aiohttp.ClientError as e:
             logger.error("[현재가 조회] API 오류 (ticker=%s): %s", ticker, e)

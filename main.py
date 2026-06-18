@@ -45,6 +45,7 @@ from strategy import (
     Arbiter,
     RiskManager,
     compute_all_indicators,
+    calc_tick_weighted_imbalance,
     normalize_action,
 )
 
@@ -168,6 +169,8 @@ class DelphiTrader:
         self.order = KISOrder(self.auth_trade)
         self.risk = RiskManager()
         self.stock_name = self.market.get_stock_name(ticker)
+        self.prev_acml_amt: int = 0
+        self.prev_momentary_amt: int = 0
         self.arbiter = Arbiter(
             ticker=ticker,
             stock_name=self.stock_name,
@@ -374,6 +377,43 @@ class DelphiTrader:
                 "net_pnl_ratio_pct": float(last_trade.net_pnl_ratio * 100.0),
             }
 
+        # ── 실시간 추가 지표 계산 (VWAP, 순간 체결대금, 호가 틱 가중지표) ──
+        current_price_val = int(price_data.get("current_price", 0))
+        vwap = float(price_data.get("wavg_price", 0.0))
+        price_vs_vwap = ((current_price_val - vwap) / vwap * 100.0) if vwap > 0 else 0.0
+
+        current_acml_amt = int(price_data.get("acml_amt", 0))
+        if self.prev_acml_amt > 0:
+            momentary_amt = current_acml_amt - self.prev_acml_amt
+        else:
+            # 첫 실행 시 1분봉 캔들의 거래대금(종가 * 거래량)으로 대금 추정
+            latest_candle = candles_desc[0] if candles_desc else None
+            if latest_candle:
+                momentary_amt = int(latest_candle["close"]) * int(
+                    latest_candle["volume"]
+                )
+            else:
+                momentary_amt = 0
+        self.prev_acml_amt = current_acml_amt
+
+        # 이전 대비 증감률 계산
+        prev_momentary = self.prev_momentary_amt
+        momentary_amt_change_pct = (
+            ((momentary_amt - prev_momentary) / prev_momentary * 100.0)
+            if prev_momentary > 0
+            else 0.0
+        )
+        self.prev_momentary_amt = momentary_amt
+
+        # 평시 중앙값 거래대금 대비 배율 계산 (최근 20분봉 중앙값 거래량 기준)
+        median_vol = float(base_snapshot["indicators"].get("median_vol", 0.0))
+        median_amt_baseline = median_vol * current_price_val
+        momentary_amt_ratio_to_median = (
+            (momentary_amt / median_amt_baseline) if median_amt_baseline > 0 else 1.0
+        )
+
+        tick_weighted_imbalance = calc_tick_weighted_imbalance(orderbook)
+
         return {
             "price_data": price_data,
             "candles_desc": candles_desc,
@@ -385,6 +425,12 @@ class DelphiTrader:
             "analysis_candles": base_snapshot["analysis_candles"],
             "indicators": base_snapshot["indicators"],
             "last_exit_info": last_exit_info,
+            "vwap": vwap,  # 당일 VWAP (가중평균가)
+            "price_vs_vwap": price_vs_vwap,  # 현재가와 VWAP 이격률 (%)
+            "momentary_amt": momentary_amt,  # 최근 사이클 간 순간 체결대금 (원)
+            "momentary_amt_change_pct": momentary_amt_change_pct,  # 이전 대비 증감률 (%)
+            "momentary_amt_ratio_to_median": momentary_amt_ratio_to_median,  # 평시 중앙값 대금 대비 배율 (배)
+            "tick_weighted_imbalance": tick_weighted_imbalance,  # 호가 틱 가중 잔량 비율
         }
 
     async def run_cycle(self) -> None:
@@ -429,6 +475,10 @@ class DelphiTrader:
                 gate_passed=False,
                 gate_result=gate_result,
                 action="SKIP",
+                vwap=snapshot.get("vwap"),
+                price_vs_vwap=snapshot.get("price_vs_vwap"),
+                momentary_amt=snapshot.get("momentary_amt"),
+                tick_weighted_imbalance=snapshot.get("tick_weighted_imbalance"),
                 extra={"decision_source": "LM_STUDIO"},
             )
             return
@@ -453,6 +503,10 @@ class DelphiTrader:
                 gate_passed=True,
                 gate_result=gate_result,
                 action="SKIP",
+                vwap=snapshot.get("vwap"),
+                price_vs_vwap=snapshot.get("price_vs_vwap"),
+                momentary_amt=snapshot.get("momentary_amt"),
+                tick_weighted_imbalance=snapshot.get("tick_weighted_imbalance"),
                 extra={
                     "reason": "캔들 부족",
                     "decision_source": "LM_STUDIO",
@@ -603,6 +657,10 @@ class DelphiTrader:
             order_qty=order_qty,
             stop_loss=stop_loss,
             take_profit=take_profit,
+            vwap=snapshot.get("vwap"),
+            price_vs_vwap=snapshot.get("price_vs_vwap"),
+            momentary_amt=snapshot.get("momentary_amt"),
+            tick_weighted_imbalance=snapshot.get("tick_weighted_imbalance"),
             extra={
                 "decision_source": "LM_STUDIO",
                 "intervals": list(self.intervals),

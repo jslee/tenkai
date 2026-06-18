@@ -43,6 +43,10 @@ def write_cycle_log(
     stop_loss: Optional[float] = None,
     take_profit: Optional[float] = None,
     result: Optional[float] = None,  # 청산 후 수익률
+    vwap: Optional[float] = None,
+    price_vs_vwap: Optional[float] = None,
+    momentary_amt: Optional[int] = None,
+    tick_weighted_imbalance: Optional[float] = None,
     extra: Optional[dict] = None,
 ) -> None:
     """
@@ -62,6 +66,10 @@ def write_cycle_log(
         stop_loss: 손절가
         take_profit: 익절가
         result: 청산 후 수익률 (None이면 미청산)
+        vwap: 당일 VWAP (가중평균가)
+        price_vs_vwap: 현재가와 VWAP 이격률 (%)
+        momentary_amt: 최근 사이클 간 순간 체결대금 (원)
+        tick_weighted_imbalance: 호가 틱 가중 잔량 비율
         extra: 추가 정보
     """
     _ensure_log_dir()
@@ -80,6 +88,10 @@ def write_cycle_log(
         "stop_loss": round(stop_loss, 0) if stop_loss is not None else None,
         "take_profit": round(take_profit, 0) if take_profit is not None else None,
         "result": result,
+        "vwap": vwap,
+        "price_vs_vwap": price_vs_vwap,
+        "momentary_amt": momentary_amt,
+        "tick_weighted_imbalance": tick_weighted_imbalance,
     }
 
     if gate_result:
@@ -246,8 +258,14 @@ def print_session_summary(trade_history: list) -> None:
 
 def _print_and_log(lines: list[str]) -> None:
     """콘솔과 로거 양쪽에 출력한다."""
+    import sys
     output = "\n".join(lines)
-    print(output)
+    try:
+        print(output)
+    except UnicodeEncodeError:
+        encoding = sys.stdout.encoding or "utf-8"
+        safe_output = output.encode(encoding, errors="replace").decode(encoding)
+        print(safe_output)
     # app.log에도 기록 (이미 핸들러가 붙어있으면 logging 사용)
     for line in lines:
         if line.strip():

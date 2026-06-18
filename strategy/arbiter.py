@@ -283,6 +283,16 @@ class Arbiter:
             f"5m RSI: {rsi_5m.get('rsi', 0.0):.0f}\n" if 5 in self.intervals else ""
         )
 
+        # 신규 수급/체결 관련 추가 지표 포맷팅
+        vwap = snapshot.get("vwap", 0.0)  # 거래량가중평균가
+        price_vs_vwap = snapshot.get("price_vs_vwap", 0.0)  # 현재가이격률
+        momentary_amt = snapshot.get("momentary_amt", 0)  # 순간체결대금
+        momentary_amt_change_pct = snapshot.get("momentary_amt_change_pct", 0.0)  # 이전 대비 증감률 (%)
+        momentary_amt_ratio_to_median = snapshot.get("momentary_amt_ratio_to_median", 1.0)  # 평시 중앙값 대비 배율 (배)
+        tick_weighted_imbalance = snapshot.get(
+            "tick_weighted_imbalance", 0.0
+        )  # 호가 틱 가중지표
+
         # 시장지수 및 호가창
         market_context_text = (
             f"현재가: {current_price:,}\n"
@@ -290,7 +300,10 @@ class Arbiter:
             f"체결강도: {snapshot.get('trade_strength', 0.0):.0f}%\n"
             f"매수잔량비율: {orderbook.get('buy_ratio', 0.5) * 100:.0f}%\n"
             f"매도호가 상위10(잔량): {_build_orderbook_str(orderbook.get('ask_prices', []), orderbook.get('ask_volumes', []))}\n"
-            f"매수호가 상위10(잔량): {_build_orderbook_str(orderbook.get('bid_prices', []), orderbook.get('bid_volumes', []))}"
+            f"매수호가 상위10(잔량): {_build_orderbook_str(orderbook.get('bid_prices', []), orderbook.get('bid_volumes', []))}\n"
+            f"당일 VWAP(거래량 가중평균가): {vwap:,.1f}원 (현재가 이격률: {price_vs_vwap:+.2f}%)\n"
+            f"순간 체결대금 (최근 1분간): {momentary_amt:,.0f}원 ({momentary_amt / 1_000_000:.2f}백만원, 이전대비: {momentary_amt_change_pct:+.1f}%, 평시중앙값대비: {momentary_amt_ratio_to_median:.2f}배)\n"
+            f"호가 틱 가중지표 (근접 호가 가중 잔량 비율): {tick_weighted_imbalance:+.4f} (양수=매수잔량 우세, 음수=매도잔량 우세, 범위: -1.0 ~ +1.0)"
         )
 
         # 현재 보유 포지션

@@ -487,3 +487,38 @@ def compute_all_indicators(candles: list[dict[str, Any]]) -> dict[str, Any]:
         "median_vol": median_vol,
         "htf_ema_long": htf_ema_long,  # HTF EMA_LONG (gate2 HTF 점수용)
     }
+
+
+def calc_tick_weighted_imbalance(orderbook: dict[str, Any]) -> float:
+    """
+    호가창의 각 호가 칸(tick)별 잔량을 현재가와 가까운 순서대로 가중치를 부여하여 가중 잔량 비율(Imbalance)을 계산한다.
+
+    Args:
+        orderbook: 호가창 데이터 딕셔너리
+            - "ask_volumes": 매도 잔량 리스트 (1~10호가)
+            - "bid_volumes": 매수 잔량 리스트 (1~10호가)
+
+    Returns:
+        가중 잔량 비율 (-1.0 ~ 1.0).
+        - 1.0에 가까울수록 근접 매수 호가 잔량이 압도적
+        - -1.0에 가까울수록 근접 매도 호가 잔량이 압도적
+        - 0.0 부근은 수급 균형
+    """
+    ask_vols = orderbook.get("ask_volumes", [])
+    bid_vols = orderbook.get("bid_volumes", [])
+
+    if not ask_vols or not bid_vols or len(ask_vols) < 10 or len(bid_vols) < 10:
+        return 0.0
+
+    # 가중치: 1호가(현재가에 가장 가까움)는 10, 10호가는 1
+    weights = [11 - i for i in range(1, 11)]
+
+    weighted_ask = sum(float(vol) * w for vol, w in zip(ask_vols[:10], weights))
+    weighted_bid = sum(float(vol) * w for vol, w in zip(bid_vols[:10], weights))
+
+    total = weighted_ask + weighted_bid
+    if total <= 0:
+        return 0.0
+
+    return (weighted_bid - weighted_ask) / total
+
