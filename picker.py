@@ -48,7 +48,8 @@ SYSTEM_PROMPT = """Follow these instructions strictly:
 
 # 점수 산정에 대한 세부지침 없이 AI의 평가 능력에 맡기는 형태로 전환
 PICKER_PROMPT_TEMPLATE = """당신은 한국 주식 단기 스윙 트레이딩을 평가하는 '포트폴리오 스크리닝 에이전트'입니다.
-당장 내일 지정 종목을 매수할지 말지를 결정하는 것이 당신의 역할입니다.  
+당장 내일 지정 종목을 매수할지 말지를 결정하는 것이 당신의 역할입니다.
+{guideline}
 
 [입력 데이터]
 - 종목코드: {ticker}
@@ -326,6 +327,7 @@ async def _ask_to_picker(
     name: str,
     chart_paths: dict[str, Path],
     indicators_summary: dict[str, dict[str, float]],
+    guideline: str = "",
 ) -> dict[str, Any]:
     """일봉/주봉/월봉 차트를 LM Studio에 전달하고 채점 결과를 반환한다."""
     ind_d = indicators_summary.get("D", {})
@@ -348,7 +350,7 @@ async def _ask_to_picker(
     )
 
     prompt_text = PICKER_PROMPT_TEMPLATE.format(
-        ticker=ticker, name=name, core_anchor=core_anchor
+        ticker=ticker, name=name, core_anchor=core_anchor, guideline=guideline
     )
 
     content: list[dict[str, Any]] = [{"type": "text", "text": prompt_text}]
@@ -565,7 +567,9 @@ async def _run(args: argparse.Namespace) -> None:
         chart_paths, indicators_summary = result
 
         print(f"  → 분석 요청...")
-        decision = await _ask_to_picker(ticker, name, chart_paths, indicators_summary)
+        decision = await _ask_to_picker(
+            ticker, name, chart_paths, indicators_summary, guideline=args.guideline
+        )
         decision["ticker"] = ticker
         decision["name"] = name
         results.append(decision)
@@ -605,6 +609,11 @@ def _parse_args() -> argparse.Namespace:
         "--name",
         default=None,
         help="종목명으로 단일 종목 지정. 예: 삼성전자  (--ticker 대신 사용 가능)",
+    )
+    parser.add_argument(
+        "--guideline",
+        default="",
+        help="AI 분석 시 적용할 추가 가이드라인 지침",
     )
     parser.add_argument("--debug", action="store_true", help="DEBUG 로그 출력")
     return parser.parse_args()
