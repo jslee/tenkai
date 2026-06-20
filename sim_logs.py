@@ -143,7 +143,22 @@ async def simulate_today(ticker: str, target_date: str = None):
                 if record.get("event", "CYCLE") == "CYCLE" and record.get(
                     "gate_passed"
                 ):
-                    if record.get("timestamp", "").startswith(today_str):
+                    ts_str = record.get("timestamp", "")
+                    if ts_str.startswith(today_str):
+                        if config.MARKET_OPEN_TIME:
+                            try:
+                                from datetime import time
+
+                                open_time = time(
+                                    *map(int, config.MARKET_OPEN_TIME.split(":"))
+                                )
+                                dt = datetime.fromisoformat(ts_str.replace(" ", "T"))
+                                if dt.time() < open_time:
+                                    continue
+                            except Exception as e:
+                                logger.warning(
+                                    f"Failed to filter timestamp {ts_str} against MARKET_OPEN_TIME: {e}"
+                                )
                         if "chart_paths" in record:
                             cycles.append(record)
             except json.JSONDecodeError:

@@ -84,7 +84,7 @@ _CHART_DEFAULTS = _load_chart_defaults()
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="AI 기반 KIS 자동매매")
+    parser = argparse.ArgumentParser(description="AI 기반 자동매매")
     parser.add_argument(
         "--ticker", type=str, default=config.TICKER, help="거래 종목 코드"
     )

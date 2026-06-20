@@ -73,10 +73,11 @@ CANDLE_INTERVAL: int = int(os.environ.get("CANDLE_INTERVAL", "1"))
 # ※ FHKST03010230(fid_pw_data_incu_yn=Y) 실측 결과: 15:30 이후 데이터 없음.
 #    시간외 분봉이 필요하다면 별도 API 엔드포인트 조사가 필요하다.
 #
-# 진입 가능 시작 시각 (장 시작 직후 갭 변동 회피-> +5분)
-MARKET_OPEN_TIME: str = "09:05"
+# 진입 가능 시작 시각 (장 시작 직후 갭 변동 회피-> +60분)
+# 오전 8:00~9:00 매매정보는 가져올 수 없기 때문에 지난 정규장에 이어 갭으로 표시된다.
+MARKET_OPEN_TIME: str = "09:30"
 # 장 마감 시각 (HOLD_OVERNIGHT=False 시 미청산 포지션 강제 청산)
-MARKET_CLOSE_TIME: str = "15:15"
+MARKET_CLOSE_TIME: str = "15:00"
 
 
 # ── 오버나이트 및 종료 설정 ─────────────────────────────────────
