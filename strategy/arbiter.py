@@ -14,6 +14,7 @@ import yaml
 
 import aiohttp
 import numpy as np
+import pandas as pd
 
 import config
 from kis_api.market import KISMarket
@@ -26,8 +27,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_PROMPT_FILE = Path(__file__).parent.parent / "prompt.yaml"
-_prompt_data: dict = yaml.safe_load(_PROMPT_FILE.read_text(encoding="utf-8"))
+SUPPORT_CHART_IMAGES = False
+
+if SUPPORT_CHART_IMAGES:
+    _PROMPT_FILE = Path(__file__).parent.parent / "prompt.yaml"
+    _prompt_data: dict = yaml.safe_load(_PROMPT_FILE.read_text(encoding="utf-8"))
+else:
+    _PROMPT_FILE = Path(__file__).parent.parent / "prompt_nochart.yaml"
+    _prompt_data: dict = yaml.safe_load(_PROMPT_FILE.read_text(encoding="utf-8"))
 
 _SYSTEM_PROMPT: str = _prompt_data["system_prompt"]
 _ANALYSIS_INTRO: str = _prompt_data["analysis_intro"]
@@ -174,11 +181,122 @@ class Arbiter:
         self.intervals = intervals
         self.output_dir = output_dir
         self.risk = risk
+        self.has_chart_images = SUPPORT_CHART_IMAGES
 
     @property
     def system_prompt(self) -> str:
         """시스템 프롬프트 텍스트를 반환합니다."""
         return _SYSTEM_PROMPT
+
+    def build_time_series_instead_charts(self, snapshot: dict[str, Any]) -> str:
+        """차트에 표시되는 모든 정보를 시계열 텍스트로 생성한다.
+
+        각 interval별로 최근 차트 캔들 및 각종 지표 데이터를 테이블(Markdown 형식)로 변환한다.
+        """
+        lines = []
+        interval_snapshots = snapshot.get("interval_snapshots", {})
+
+        rename_map = {
+            "label": "시간",
+            "open": "시가",
+            "high": "고가",
+            "low": "저가",
+            "close": "종가",
+            "volume": "거래량",
+            "bb_upper": "BB상한",
+            "bb_mid": "BB기준",
+            "bb_lower": "BB하한",
+            "ema_short": f"EMA({config.EMA_SHORT})",
+            "ema_long": f"EMA({config.EMA_LONG})",
+            "ema_trend": f"EMA({config.EMA_TREND})",
+            "rsi": "RSI",
+            "macd": "MACD",
+            "macd_signal": "Signal",
+            "macd_hist": "Hist",
+        }
+
+        def fmt_price(val: Any) -> str:
+            if pd.isna(val):
+                return "-"
+            try:
+                f_val = float(val)
+                if f_val.is_integer():
+                    return f"{int(f_val):,}"
+                return f"{f_val:,.1f}"
+            except Exception:
+                return str(val)
+
+        def fmt_vol(val: Any) -> str:
+            if pd.isna(val):
+                return "-"
+            try:
+                return f"{int(float(val)):,}"
+            except Exception:
+                return str(val)
+
+        def fmt_float(val: Any) -> str:
+            if pd.isna(val):
+                return "-"
+            try:
+                return f"{float(val):,.2f}"
+            except Exception:
+                return str(val)
+
+        for interval in self.intervals:
+            if interval not in interval_snapshots:
+                continue
+
+            snap = interval_snapshots[interval]
+            df = snap.get("chart_frame")
+            if df is None or df.empty:
+                continue
+
+            lines.append(f"### {interval}분봉 차트 시계열 데이터 (최근 {len(df)}개 봉)")
+
+            formatted_df = pd.DataFrame()
+            if "label" in df.columns:
+                formatted_df["시간"] = df["label"].astype(str)
+            elif "timestamp" in df.columns:
+                formatted_df["시간"] = df["timestamp"].astype(str)
+
+            # 가격
+            for col in ["open", "high", "low", "close"]:
+                if col in df.columns:
+                    formatted_df[rename_map[col]] = df[col].apply(fmt_price)
+
+            # 거래량
+            if "volume" in df.columns:
+                formatted_df[rename_map["volume"]] = df["volume"].apply(fmt_vol)
+
+            # 지표들
+            for col in [
+                "bb_upper",
+                "bb_mid",
+                "bb_lower",
+                "ema_short",
+                "ema_long",
+                "ema_trend",
+                "rsi",
+                "macd",
+                "macd_signal",
+                "macd_hist",
+            ]:
+                if col in df.columns:
+                    formatted_df[rename_map[col]] = df[col].apply(fmt_float)
+
+            # 테이블 생성
+            headers = list(formatted_df.columns)
+            header_line = " | ".join(headers)
+            sep_line = " | ".join(["---"] * len(headers))
+            row_lines = []
+            for row in formatted_df.itertuples(index=False):
+                row_lines.append(" | ".join(str(x) for x in row))
+
+            table_str = "\n".join([header_line, sep_line] + row_lines)
+            lines.append(table_str)
+            lines.append("")
+
+        return "\n".join(lines).strip()
 
     # ── 차트 렌더링 ─────────────────────────────────────────────────────────
 
@@ -186,6 +304,9 @@ class Arbiter:
         self, interval_snapshots: dict[int, dict[str, Any]]
     ) -> dict[int, Path]:
         """각 interval 차트 PNG를 생성하고 경로를 반환한다."""
+        if not self.has_chart_images:
+            return None
+
         from make_charts import _render_interval_chart  # 순환 임포트 방지
 
         chart_paths: dict[int, Path] = {}
@@ -214,74 +335,77 @@ class Arbiter:
         """스냅샷으로부터 LM Studio 프롬프트 텍스트를 생성한다."""
         orderbook = snapshot["orderbook"]
         current_price = snapshot["price_data"]["current_price"]
-
         indicators = snapshot["indicators"]
-        closes_1m = [
-            float(c["close"]) for c in reversed(snapshot.get("analysis_candles", []))
-        ]
-        closes_3m = [
-            float(c["close"])
-            for c in reversed(
-                snapshot.get("interval_snapshots", {})
-                .get(3, {})
-                .get("analysis_candles", [])
-            )
-        ]
-        closes_5m = [
-            float(c["close"])
-            for c in reversed(
-                snapshot.get("interval_snapshots", {})
-                .get(5, {})
-                .get("analysis_candles", [])
-            )
-        ]
-        ema_1m = {
-            5: indicators.get("ema_short", 0.0),
-            20: indicators.get("ema_long", 0.0),
-            # 30: _ema(closes_1m, 30)[-1] if len(closes_1m) >= 30 else 0.0,
-            60: _ema(closes_1m, 60)[-1] if len(closes_1m) >= 60 else 0.0,
-        }
-        ema_3m = {
-            5: _ema(closes_3m, 5)[-1] if len(closes_3m) >= 5 else 0.0,
-            20: _ema(closes_3m, 20)[-1] if len(closes_3m) >= 20 else 0.0,
-            60: _ema(closes_3m, 60)[-1] if len(closes_3m) >= 60 else 0.0,
-        }
-        ema_5m = {
-            5: _ema(closes_5m, 5)[-1] if len(closes_5m) >= 5 else 0.0,
-            20: _ema(closes_5m, 20)[-1] if len(closes_5m) >= 20 else 0.0,
-            60: _ema(closes_5m, 60)[-1] if len(closes_5m) >= 60 else 0.0,
-        }
 
-        rsi_1m = calc_rsi(closes_1m)
-        rsi_3m = calc_rsi(closes_3m)
-        rsi_5m = calc_rsi(closes_5m)
+        # 차트 이미지를 지원하면 최신 캔들 정보만을 추가로 제공한다.
+        if self.has_chart_images:
+            closes_1m = [
+                float(c["close"])
+                for c in reversed(snapshot.get("analysis_candles", []))
+            ]
+            closes_3m = [
+                float(c["close"])
+                for c in reversed(
+                    snapshot.get("interval_snapshots", {})
+                    .get(3, {})
+                    .get("analysis_candles", [])
+                )
+            ]
+            closes_5m = [
+                float(c["close"])
+                for c in reversed(
+                    snapshot.get("interval_snapshots", {})
+                    .get(5, {})
+                    .get("analysis_candles", [])
+                )
+            ]
+            ema_1m = {
+                5: indicators.get("ema_short", 0.0),
+                20: indicators.get("ema_long", 0.0),
+                # 30: _ema(closes_1m, 30)[-1] if len(closes_1m) >= 30 else 0.0,
+                60: _ema(closes_1m, 60)[-1] if len(closes_1m) >= 60 else 0.0,
+            }
+            ema_3m = {
+                5: _ema(closes_3m, 5)[-1] if len(closes_3m) >= 5 else 0.0,
+                20: _ema(closes_3m, 20)[-1] if len(closes_3m) >= 20 else 0.0,
+                60: _ema(closes_3m, 60)[-1] if len(closes_3m) >= 60 else 0.0,
+            }
+            ema_5m = {
+                5: _ema(closes_5m, 5)[-1] if len(closes_5m) >= 5 else 0.0,
+                20: _ema(closes_5m, 20)[-1] if len(closes_5m) >= 20 else 0.0,
+                60: _ema(closes_5m, 60)[-1] if len(closes_5m) >= 60 else 0.0,
+            }
 
-        # 그래프로 인식하는 것보다 정확한 수치로 제시하는 것이 판단에 더 도움이 될 것.
-        core_anchor = ""
-        core_anchor += (
-            f"1m EMA: [5: {ema_1m[5]:,.0f} / 20: {ema_1m[20]:,.0f} / 60: {ema_1m[60]:,.0f}]\n"
-            if 1 in self.intervals
-            else ""
-        )
-        core_anchor += (
-            f"3m EMA: [5: {ema_3m[5]:,.0f} / 20: {ema_3m[20]:,.0f} / 60: {ema_3m[60]:,.0f}]\n"
-            if 3 in self.intervals
-            else ""
-        )
-        core_anchor += (
-            f"5m EMA: [5: {ema_5m[5]:,.0f} / 20: {ema_5m[20]:,.0f} / 60: {ema_5m[60]:,.0f}]\n"
-            if 5 in self.intervals
-            else ""
-        )
-        core_anchor += (
-            f"1m RSI: {rsi_1m.get('rsi', 0.0):.0f}\n" if 1 in self.intervals else ""
-        )
-        core_anchor += (
-            f"3m RSI: {rsi_3m.get('rsi', 0.0):.0f}\n" if 3 in self.intervals else ""
-        )
-        core_anchor += (
-            f"5m RSI: {rsi_5m.get('rsi', 0.0):.0f}\n" if 5 in self.intervals else ""
-        )
+            rsi_1m = calc_rsi(closes_1m)
+            rsi_3m = calc_rsi(closes_3m)
+            rsi_5m = calc_rsi(closes_5m)
+
+            # 그래프로 인식하는 것보다 정확한 수치로 제시하는 것이 판단에 더 도움이 될 것.
+            core_anchor = ""
+            core_anchor += (
+                f"1m EMA: [5: {ema_1m[5]:,.0f} / 20: {ema_1m[20]:,.0f} / 60: {ema_1m[60]:,.0f}]\n"
+                if 1 in self.intervals
+                else ""
+            )
+            core_anchor += (
+                f"3m EMA: [5: {ema_3m[5]:,.0f} / 20: {ema_3m[20]:,.0f} / 60: {ema_3m[60]:,.0f}]\n"
+                if 3 in self.intervals
+                else ""
+            )
+            core_anchor += (
+                f"5m EMA: [5: {ema_5m[5]:,.0f} / 20: {ema_5m[20]:,.0f} / 60: {ema_5m[60]:,.0f}]\n"
+                if 5 in self.intervals
+                else ""
+            )
+            core_anchor += (
+                f"1m RSI: {rsi_1m.get('rsi', 0.0):.0f}\n" if 1 in self.intervals else ""
+            )
+            core_anchor += (
+                f"3m RSI: {rsi_3m.get('rsi', 0.0):.0f}\n" if 3 in self.intervals else ""
+            )
+            core_anchor += (
+                f"5m RSI: {rsi_5m.get('rsi', 0.0):.0f}\n" if 5 in self.intervals else ""
+            )
 
         # 신규 수급/체결 관련 추가 지표 포맷팅
         vwap = snapshot.get("vwap", 0.0)  # 거래량가중평균가
@@ -339,15 +463,30 @@ class Arbiter:
             config.BROKER_FEE_RATE * 2 + config.TRANSACTION_TAX_RATE
         ) * 100  # 매수+매도 수수료 + 거래세
 
-        return f"""
+        if not self.has_chart_images:
+            time_series_text = self.build_time_series_instead_charts(snapshot)
+
+        # fmt: off
+        return (
+f"""
 {_ANALYSIS_INTRO}
-
-[기본 지표]
+"""
++ 
+f"""
+[기본지표]
 {core_anchor}
-
+""" if self.has_chart_images else                
+f"""
+[차트 시계열 데이터]
+{time_series_text}
+"""
++ 
+f"""  
 [시장지수 및 호가창 데이터]
 {market_context_text}
-
+"""
++ 
+f"""
 [보유 포지션]
 {position_text}
 
@@ -373,7 +512,9 @@ class Arbiter:
         "orderbook_strength": "체결강도 및 호가 수급의 유효성"
     }},
     "reason": "최종 결정을 내린 근거를 자세히 설명"
-}}""".strip()
+}}""".strip())
+
+    # fmt: on
 
     # ── LM Studio 호출 ──────────────────────────────────────────────────────
 
@@ -385,18 +526,23 @@ class Arbiter:
         실패 시 action=HOLD로 안전하게 강등한다.
         """
         content: list[dict[str, Any]] = [{"type": "text", "text": prompt_text}]
-        for interval in self.intervals:
-            content.append(
-                {"type": "text", "text": f"다음 이미지는 {interval}분봉 차트입니다."}
-            )
-            content.append(
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": _encode_image_to_data_url(chart_paths[interval])
-                    },
-                }
-            )
+
+        if self.has_chart_images:
+            for interval in self.intervals:
+                content.append(
+                    {
+                        "type": "text",
+                        "text": f"다음 이미지는 {interval}분봉 차트입니다.",
+                    }
+                )
+                content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": _encode_image_to_data_url(chart_paths[interval])
+                        },
+                    }
+                )
 
         payload = {
             "model": config.ARBITER_MODEL,

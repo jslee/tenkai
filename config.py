@@ -223,8 +223,13 @@ STOCK_CODE_DIR: str = os.environ.get(
 
 # ── Arbiter 파라미터 (LM Studio) ────────────────────────────────
 ARBITER_BASE_URL: str = os.environ.get(
-    "ARBITER_BASE_URL", "http://127.0.0.1:1234/v1/chat/completions"
+    "ARBITER_BASE_URL",
+    "http://127.0.0.1:1234/v1/chat/completions",
+    # "https://ws-3wgy7kot3iappndy.ap-northeast-1.maas.aliyuncs.com/compatible-mode/v1",
 )
+
+# QWEN(Alibaba Cloud Model Studio)
+# OPENAI_API_KEY: str = os.environ.get("ALIBABA_API_KEY", None)
 
 # 🧩 Qwen 3.6의 '눈(Vision)'이 작동하는 방식:
 # 1. 원본 비율 및 픽셀의 무조건 보존

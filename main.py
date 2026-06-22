@@ -665,10 +665,14 @@ class DelphiTrader:
                 "decision_source": "LM_STUDIO",
                 "intervals": list(self.intervals),
                 "decision_timestamp": snapshot.get("decision_timestamp"),
-                "chart_paths": {
-                    str(interval): str(chart_paths[interval])
-                    for interval in self.intervals
-                },
+                "chart_paths": (
+                    {
+                        str(interval): str(chart_paths[interval])
+                        for interval in self.intervals
+                    }
+                    if chart_paths is not None
+                    else ""
+                ),
                 "ai_action": ai_action,
                 "confidence": ai_confidence,
                 "analysis": analysis,
