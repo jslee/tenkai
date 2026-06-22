@@ -222,11 +222,7 @@ STOCK_CODE_DIR: str = os.environ.get(
 )  # kospi_code.mst, kosdaq_code.mst 위치
 
 # ── Arbiter 파라미터 (LM Studio) ────────────────────────────────
-ARBITER_BASE_URL: str = os.environ.get(
-    "ARBITER_BASE_URL",
-    "http://127.0.0.1:1234/v1/chat/completions",
-    # "https://ws-3wgy7kot3iappndy.ap-northeast-1.maas.aliyuncs.com/compatible-mode/v1",
-)
+ARBITER_BASE_URL: str = os.environ.get("ARBITER_BASE_URL", None)
 
 # QWEN(Alibaba Cloud Model Studio)
 # OPENAI_API_KEY: str = os.environ.get("ALIBABA_API_KEY", None)
