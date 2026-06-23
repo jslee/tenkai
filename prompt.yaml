@@ -27,7 +27,7 @@ analysis_intro: |
 #  - 이 항목이 매매 빈도에 가장 큰 영향을 준다. 이 항이 명시되면 매매 횟수가 확 줄어든다.
 #  - 매수, 매도에 좀더 구체적인 가이드라인을 추가하면 빈도가 줄면서 승률이 좋아지지 않을까? -> 실험 필요.    
 analysis_principles: |
-  [분석 및 판단 원칙 - 반드시 준수할 것]
+  반드시 준수할 것
   1. Top-Down Approach:
     - 5분봉의 추세(Trend)를 '전략적 방향'으로 삼고, 3분봉으로 '진입 타이밍'을 결정한다.
     - 5분봉의 방향과 3분봉의 신호가 충돌하면 HOLD한다.
@@ -41,6 +41,21 @@ analysis_principles: |
       * 반드시 '거래량 2배↑ + MACD 골든크로스'가 동시에 충족될 때만 재진입하라.
       * 조건이 불명확하면 HOLD.
     - 5분 경과 후: 손실 제한을 해제한다. 규칙 1,2에 따라 정상 판단하라.
+
+analysis_output: |
+  반드시 아래 구조의 JSON 객체 하나만 반환하십시오. 다른 설명은 생략합니다.
+
+  {
+      "action": "BUY" | "SELL" | "HOLD",
+      "confidence": 0~100,
+      "analysis": {
+          "thinking": thinking process for action.
+          "trend_context": "시장의 배경 (상승/하락/횡보)",
+          "entry_trigger": "발견된 진입 신호 (눌림목/돌파/반등 등)",
+          "orderbook_strength": "체결강도 및 호가 수급의 유효성"
+      },
+      "reason": "최종 결정을 내린 근거를 자세히 설명"
+  }
 
 # 2. 공격적 프롬프트: 1승 0패 51,947원
 # analysis_principles: |

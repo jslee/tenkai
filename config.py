@@ -225,7 +225,7 @@ STOCK_CODE_DIR: str = os.environ.get(
 ARBITER_BASE_URL: str = os.environ.get("ARBITER_BASE_URL", None)
 
 # QWEN(Alibaba Cloud Model Studio)
-# OPENAI_API_KEY: str = os.environ.get("ALIBABA_API_KEY", None)
+OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", None)
 
 # 🧩 Qwen 3.6의 '눈(Vision)'이 작동하는 방식:
 # 1. 원본 비율 및 픽셀의 무조건 보존

@@ -178,6 +178,7 @@ class DelphiTrader:
             output_dir=self.output_dir,
             risk=self.risk,
         )
+        self.show_prompt = False
 
     async def initialize(self) -> None:
         if self.market.is_etf(self.ticker):
@@ -216,14 +217,16 @@ class DelphiTrader:
             logger.error("[Init] 기존 포지션 복구 실패: %s", exc)
 
     async def _keyboard_monitor_loop(self) -> None:
-        """Windows 콘솔에서 긴급 청산 단축키를 감시한다."""
+        """Windows 콘솔에서 단축키를 감시한다."""
         if sys.platform != "win32":
             return
 
         import msvcrt
 
         logger.info(
-            "[Monitor] 긴급 청산 단축키 활성화: 콘솔에서 's' 또는 'S' 키를 누르면 즉시 시장가 매도합니다."
+            "[Monitor] 단축키 활성화:\n"
+            "  - 's' 또는 'S' 키: 즉시 시장가 매도 (긴급 청산)\n"
+            "  - 'm' 또는 'M' 키: AI 프롬프트 출력 토글 (현재: 비활성)"
         )
 
         while True:
@@ -232,6 +235,12 @@ class DelphiTrader:
             while msvcrt.kbhit():
                 try:
                     char = msvcrt.getch()
+                    if char in (b"m", b"M"):
+                        self.show_prompt = not self.show_prompt
+                        status_str = "활성화" if self.show_prompt else "비활성화"
+                        logger.info("[Monitor] AI 프롬프트 출력 %s", status_str)
+                        continue
+
                     if char not in (b"s", b"S", b"\x13"):
                         continue
 
@@ -520,7 +529,8 @@ class DelphiTrader:
         chart_paths = await self.arbiter.render_charts(interval_snapshots)
         prompt_text = self.arbiter.build_prompt(snapshot)
 
-        print(f"{prompt_text}\n")
+        if self.show_prompt:
+            print(f"{prompt_text}\n")
 
         decision = await self.arbiter.ask(prompt_text, chart_paths)
         ai_action = normalize_action(decision.get("action"))

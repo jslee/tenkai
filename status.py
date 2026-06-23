@@ -304,7 +304,8 @@ async def render_status(market: KISMarket, is_paper: bool) -> None:
     # -- 최근 거래 내역 --
     recent_trades = get_recent_trades(20)
     trade_headers = [
-        "시간",
+        "매수시간",
+        "매도시간",
         "종목",
         "수량",
         "진입가",
@@ -315,6 +316,7 @@ async def render_status(market: KISMarket, is_paper: bool) -> None:
     ]
     trade_aligns = [
         "center",
+        "center",
         "left",
         "right",
         "right",
@@ -323,16 +325,20 @@ async def render_status(market: KISMarket, is_paper: bool) -> None:
         "right",
         "right",
     ]
-    trade_min_widths = [19, 14, 6, 10, 10, 10, 8, 10]
+    trade_min_widths = [19, 19, 14, 6, 10, 10, 10, 8, 10]
 
     if not recent_trades:
-        trade_rows = [["", "거래 내역 없음", "", "", "", "", "", ""]]
+        trade_rows = [["", "", "거래 내역 없음", "", "", "", "", "", ""]]
     else:
         trade_rows = []
         for t in recent_trades:
-            # ISO timestamp에서 년월일 시간 추출 (예: 2026-04-28T10:20:49 -> 2026-04-28 10:20:49)
-            ts_raw = t.get("timestamp", "")
-            ts = ts_raw.replace("T", " ")[:19] if ts_raw else ""
+            # ISO timestamp에서 년월일 시간 추출
+            ts_exit_raw = t.get("timestamp", "")
+            ts_exit = ts_exit_raw.replace("T", " ")[:19] if ts_exit_raw else ""
+
+            ts_entry_raw = t.get("entry_time", "")
+            ts_entry = ts_entry_raw.replace("T", " ")[:19] if ts_entry_raw else ""
+
             ticker = t.get("ticker", "")
             name = market.get_stock_name(ticker)
             qty = t.get("qty", 0)
@@ -342,13 +348,11 @@ async def render_status(market: KISMarket, is_paper: bool) -> None:
             pnl_ratio = t.get("pnl_ratio", 0.0) * 100
 
             # 보유 시간 계산
-            ts_exit = t.get("timestamp", "")
-            ts_entry = t.get("entry_time", "")
             holding_time = "-"
-            if ts_exit and ts_entry:
+            if ts_exit_raw and ts_entry_raw:
                 try:
-                    dt_exit = datetime.fromisoformat(ts_exit)
-                    dt_entry = datetime.fromisoformat(ts_entry)
+                    dt_exit = datetime.fromisoformat(ts_exit_raw)
+                    dt_entry = datetime.fromisoformat(ts_entry_raw)
                     diff = dt_exit - dt_entry
                     h_secs = int(diff.total_seconds())
                     if h_secs < 0:
@@ -364,7 +368,8 @@ async def render_status(market: KISMarket, is_paper: bool) -> None:
 
             trade_rows.append(
                 [
-                    ts,
+                    ts_entry,
+                    ts_exit,
                     f"{name}({ticker})",
                     f"{qty:,}",
                     f"{entry:,}",

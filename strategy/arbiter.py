@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-SUPPORT_CHART_IMAGES = False
+SUPPORT_CHART_IMAGES = True
 
 if SUPPORT_CHART_IMAGES:
     _PROMPT_FILE = Path(__file__).parent.parent / "prompt.yaml"
@@ -39,6 +39,7 @@ else:
 _SYSTEM_PROMPT: str = _prompt_data["system_prompt"]
 _ANALYSIS_INTRO: str = _prompt_data["analysis_intro"]
 _ANALYSIS_PRINCIPLES: str = _prompt_data["analysis_principles"]
+_ANALYSIS_OUTPUT: str = _prompt_data["analysis_output"]
 
 _ACTION_MAP: dict[str, str] = {
     "BUY": "BUY",
@@ -188,7 +189,7 @@ class Arbiter:
         """시스템 프롬프트 텍스트를 반환합니다."""
         return _SYSTEM_PROMPT
 
-    def build_time_series_instead_charts(self, snapshot: dict[str, Any]) -> str:
+    def build_time_series_of_charts(self, snapshot: dict[str, Any]) -> str:
         """차트에 표시되는 모든 정보를 시계열 텍스트로 생성한다.
 
         각 interval별로 최근 차트 캔들 및 각종 지표 데이터를 테이블(Markdown 형식)로 변환한다.
@@ -464,57 +465,24 @@ class Arbiter:
         ) * 100  # 매수+매도 수수료 + 거래세
 
         if not self.has_chart_images:
-            time_series_text = self.build_time_series_instead_charts(snapshot)
+            time_series_text = self.build_time_series_of_charts(snapshot)
 
-        # fmt: off
-        return (
-f"""
-{_ANALYSIS_INTRO}
-"""
-+ 
-f"""
-[기본지표]
-{core_anchor}
-""" if self.has_chart_images else                
-f"""
-[차트 시계열 데이터]
-{time_series_text}
-"""
-+ 
-f"""  
-[시장지수 및 호가창 데이터]
-{market_context_text}
-"""
-+ 
-f"""
-[보유 포지션]
-{position_text}
-
-[최근 매도 정보]
-{last_exit_text}
-
-[제세금 및 수수료]
-{cost_ratio:.3}%
-
-[분석 및 판단 원칙]
-{_ANALYSIS_PRINCIPLES}
-   
-[출력 형식]
-반드시 아래 구조의 JSON 객체 하나만 반환하십시오. 다른 설명은 생략합니다.
-
-{{
-    "action": "BUY" | "SELL" | "HOLD",
-    "confidence": 0~100,
-    "analysis": {{
-        "thinking": thinking process for action.
-        "trend_context": "시장의 배경 (상승/하락/횡보)",
-        "entry_trigger": "발견된 진입 신호 (눌림목/돌파/반등 등)",
-        "orderbook_strength": "체결강도 및 호가 수급의 유효성"
-    }},
-    "reason": "최종 결정을 내린 근거를 자세히 설명"
-}}""".strip())
-
-    # fmt: on
+        return "\n\n".join(
+            [
+                _ANALYSIS_INTRO,
+                (
+                    f"""[기본지표]\n{core_anchor}"""
+                    if self.has_chart_images
+                    else f"""[차트 시계열 데이터]\n{time_series_text}"""
+                ),
+                f"""[시장지수 및 호가창 데이터]\n{market_context_text}""",
+                f"""[보유 포지션]\n{position_text}""",
+                f"""[최근 매도 정보]\n{last_exit_text}""",
+                f"""[제세금 및 수수료]\n{cost_ratio:.3}%""",
+                f"""[분석 및 판단 원칙]\n{_ANALYSIS_PRINCIPLES}""",
+                f"""[출력 형식]\n{_ANALYSIS_OUTPUT}""",
+            ]
+        )
 
     # ── LM Studio 호출 ──────────────────────────────────────────────────────
 
@@ -553,6 +521,11 @@ f"""
                 {"role": "user", "content": content},
             ],
         }
+
+        headers = {}
+        api_key = getattr(config, "OPENAI_API_KEY", None)
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
 
         timeout = aiohttp.ClientTimeout(total=config.ARBITER_TIMEOUT_SEC)
         try:

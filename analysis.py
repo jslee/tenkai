@@ -145,10 +145,19 @@ async def _ask_analysis(
         ],
     }
 
+    headers = {}
+    api_key = getattr(config, "OPENAI_API_KEY", None)
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    url = config.ARBITER_BASE_URL or "http://127.0.0.1:1234/v1/chat/completions"
+    if not url.endswith("/chat/completions"):
+        url = url.rstrip("/") + "/chat/completions"
+
     timeout = aiohttp.ClientTimeout(total=config.ARBITER_TIMEOUT_SEC)
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(config.ARBITER_BASE_URL, json=payload) as resp:
+            async with session.post(url, json=payload, headers=headers) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
     except Exception as exc:
