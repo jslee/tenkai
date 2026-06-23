@@ -199,23 +199,20 @@ async def simulate_today(ticker: str, target_date: str = None):
         new_prompt_text = arbiter.build_prompt(mock_snapshot)
         # logger.info(f"\n{new_prompt_text}\n")
 
-        chart_paths_str = record.get("chart_paths", {})
-        chart_paths = {}
-        for k, v in chart_paths_str.items():
-            path = Path(v)
-            if path.exists():
-                chart_paths[int(k)] = path
-
-        if not chart_paths:
-            logger.warning(
-                f"[{ts}] 차트 이미지가 존재하지 않아 이 사이클은 스킵합니다."
-            )
-            continue
+        try:
+            chart_paths_str = record.get("chart_paths", {})
+            chart_paths = {}
+            for k, v in chart_paths_str.items():
+                path = Path(v)
+                if path.exists():
+                    chart_paths[int(k)] = path
+        except Exception as e:
+            # 모드에 따라 이미지가 생성되지 않은 경우가 있다.
+            logger.info("No charts in record.")
 
         # 로그에 기록된 차트 인터벌에 맞춰 Arbiter 설정 동적 업데이트
         arbiter.intervals = tuple(sorted(chart_paths.keys()))
 
-        print("")
         logger.info(f"[{ts}] 현재가: {current_price:,}원 | Arbiter에 분석 요청 중...")
 
         decision = await arbiter.ask(new_prompt_text, chart_paths)

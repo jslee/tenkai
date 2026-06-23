@@ -13,6 +13,13 @@
             "args": ["--ticker", "069500"]
         },
         {
+            "name": "Simulate",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/sim_logs.py",
+            "args": ["--ticker", "069500"]
+        },
+        {
             "name": "Chart",
             "type": "debugpy",
             "request": "launch",
