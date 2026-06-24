@@ -62,6 +62,9 @@ PICKER_PROMPT_TEMPLATE = """당신은 한국 주식 단기 스윙 트레이딩�
 [기본 지표]
 {core_anchor}
 
+[재무 정보]
+{financial_info}
+
 [평가 원칙]
 - 내일 당장 진입할 만한 종목인지 평가해 점수를 매긴다. 
 - 차트에 포함된 지표와 기본 지표, 뉴스, 커뮤니티 정보를 종합하여 매수 매력도를 채점한다.
@@ -327,6 +330,7 @@ async def _ask_to_picker(
     name: str,
     chart_paths: dict[str, Path],
     indicators_summary: dict[str, dict[str, float]],
+    financial_ratios: list[dict[str, Any]],
     guideline: str = "",
 ) -> dict[str, Any]:
     """일봉/주봉/월봉 차트를 LM Studio에 전달하고 채점 결과를 반환한다."""
@@ -349,8 +353,45 @@ async def _ask_to_picker(
         f"  - RSI: {ind_m.get('rsi', 50.0):.1f}"
     )
 
+    fin_text = ""
+    if financial_ratios:
+        fin_text += "[최근 재무 비율 (분기)]\n"
+        for f in financial_ratios[:3]:
+            yymm = f.get("stac_yymm", "")
+            if len(yymm) == 6:
+                yymm = f"{yymm[:4]}-{yymm[4:]}"
+
+            def _fmt(val):
+                if val is None or val == "":
+                    return "N/A"
+                try:
+                    v = float(val)
+                    if v.is_integer():
+                        return f"{int(v):,}"
+                    return f"{v:,.2f}"
+                except ValueError:
+                    return str(val)
+
+            fin_text += (
+                f"- 결산년월: {yymm}\n"
+                f"  * ROE(자기자본이익률): {_fmt(f.get('roe_val'))}%\n"
+                f"  * 부채비율: {_fmt(f.get('lblt_rate'))}%\n"
+                f"  * 매출액증가율: {_fmt(f.get('grs'))}%\n"
+                f"  * 영업이익증가율: {_fmt(f.get('bsop_prfi_inrt'))}%\n"
+                f"  * 당기순이익증가율: {_fmt(f.get('ntin_inrt'))}%\n"
+                f"  * EPS(주당순이익): {_fmt(f.get('eps'))}원\n"
+                f"  * BPS(주당순자산): {_fmt(f.get('bps'))}원\n"
+                f"  * 유보율: {_fmt(f.get('rsrv_rate'))}%\n"
+            )
+    else:
+        fin_text = "[최근 재무 비율]\n데이터 없음\n"
+
     prompt_text = PICKER_PROMPT_TEMPLATE.format(
-        ticker=ticker, name=name, core_anchor=core_anchor, guideline=guideline
+        ticker=ticker,
+        name=name,
+        core_anchor=core_anchor,
+        financial_info=fin_text,
+        guideline=guideline,
     )
 
     content: list[dict[str, Any]] = [{"type": "text", "text": prompt_text}]
@@ -575,9 +616,21 @@ async def _run(args: argparse.Namespace) -> None:
             continue
         chart_paths, indicators_summary = result
 
+        print(f"  → 재무 비율 조회...")
+        try:
+            financial_ratios = await market.get_financial_ratio(ticker)
+        except Exception as exc:
+            logger.warning("[%s] 재무비율 조회 실패: %s", ticker, exc)
+            financial_ratios = []
+
         print(f"  → 분석 요청...")
         decision = await _ask_to_picker(
-            ticker, name, chart_paths, indicators_summary, guideline=args.guideline
+            ticker,
+            name,
+            chart_paths,
+            indicators_summary,
+            financial_ratios,
+            guideline=args.guideline,
         )
         decision["ticker"] = ticker
         decision["name"] = name

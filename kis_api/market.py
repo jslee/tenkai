@@ -180,8 +180,10 @@ class KISMarket:
             output = data["output"]
             acml_vol = int(output["acml_vol"])
             acml_amt = int(output["acml_tr_pbmn"]) if output.get("acml_tr_pbmn") else 0
-            wavg_price = float(output["wghn_avrg_prc"]) if output.get("wghn_avrg_prc") else 0.0
-            
+            wavg_price = (
+                float(output["wghn_avrg_prc"]) if output.get("wghn_avrg_prc") else 0.0
+            )
+
             # 장외/휴일 등의 이유로 가중평균가가 0인 경우 누적 거래대금/거래량으로 대체 계산
             if wavg_price <= 0 and acml_vol > 0 and acml_amt > 0:
                 wavg_price = float(acml_amt) / float(acml_vol)
@@ -979,3 +981,33 @@ class KISMarket:
         except (KeyError, ValueError) as e:
             logger.error("[잔고 조회] 응답 파싱 오류: %s", e)
             raise
+
+    async def get_financial_ratio(self, ticker: str) -> list[dict[str, Any]]:
+        """
+        국내주식 재무비율을 조회한다.
+        FHKST66430300 (주식현재가 재무비율) API 사용.
+        """
+        url = (
+            f"{self._auth_data.base_url}/uapi/domestic-stock/v1/finance/financial-ratio"
+        )
+        params = {
+            "fid_cond_mrkt_div_code": "J",
+            "fid_input_iscd": ticker,
+            "fid_div_cls_code": "1",  # 0: 연간, 1: 분기
+        }
+        try:
+            await self._auth_data.get_token()
+            headers = self._auth_data.get_headers("FHKST66430300")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    url,
+                    headers=headers,
+                    params=params,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    resp.raise_for_status()
+                    data = await resp.json()
+            return data.get("output", [])
+        except Exception as e:
+            logger.warning("[재무비율 조회] 오류 (ticker=%s): %s", ticker, e)
+            return []
