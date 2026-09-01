@@ -173,7 +173,34 @@ def get_recent_trades(limit: int = 20) -> list[dict]:
     return trades[:limit]
 
 
-def get_daily_summary() -> dict[str, dict]:
+def _calculate_fallback_commission(record: dict, market: KISMarket) -> tuple[float, float, float]:
+    """
+    Log record에서 commission, net_pnl, net_pnl_ratio를 동적으로 계산하거나 기존 값을 반환한다.
+    """
+    pnl = record.get("pnl", 0.0)
+    pnl_ratio = record.get("pnl_ratio", 0.0)
+    qty = record.get("qty", 0)
+    entry_price = record.get("entry_price", 0.0)
+    exit_price = record.get("exit_price", 0.0)
+    ticker = record.get("ticker", "")
+
+    # 만약 이미 로그에 기록되어 있다면 그대로 반환
+    if "commission" in record and "net_pnl" in record:
+        return record["commission"], record["net_pnl"], record.get("net_pnl_ratio", pnl_ratio)
+
+    # 없으면 동적 계산
+    import config
+    tax_rate = 0.0 if market.is_etf(ticker) else config.TRANSACTION_TAX_RATE
+    buy_comm = entry_price * qty * config.BROKER_FEE_RATE
+    sell_comm = exit_price * qty * config.BROKER_FEE_RATE
+    tax = exit_price * qty * tax_rate
+    comm = buy_comm + sell_comm + tax
+    net_p = pnl - comm
+    net_pr = net_p / (entry_price * qty) if qty > 0 and entry_price > 0 else 0.0
+    return comm, net_p, net_pr
+
+
+def get_daily_summary(market: KISMarket) -> dict[str, dict]:
     """오늘 발생한 모든 종목별 거래 요약을 집계한다."""
     log_dir = os.environ.get("LOG_DIR", "logs")
     log_pattern = os.path.join(log_dir, "trades_*.jsonl")
@@ -199,14 +226,18 @@ def get_daily_summary() -> dict[str, dict]:
                                         "trades": 0,
                                         "pnl": 0.0,
                                         "pnl_ratio": 0.0,
+                                        "commission": 0.0,
+                                        "invested": 0.0,
                                         "wins": 0,
                                         "losses": 0,
                                     }
                                 s = summary[ticker]
                                 s["trades"] += 1
-                                s["pnl"] += record.get("pnl", 0.0)
-                                s["pnl_ratio"] += record.get("pnl_ratio", 0.0)
-                                if record.get("pnl", 0.0) >= 0:
+                                current_comm, current_pnl, current_pnl_ratio = _calculate_fallback_commission(record, market)
+                                s["pnl"] += current_pnl
+                                s["commission"] += current_comm
+                                s["invested"] += record.get("entry_price", 0.0) * record.get("qty", 0)
+                                if current_pnl >= 0:
                                     s["wins"] += 1
                                 else:
                                     s["losses"] += 1
@@ -215,11 +246,13 @@ def get_daily_summary() -> dict[str, dict]:
         except Exception:
             continue
 
-    # 평균 수익률 계산
+    # 투자금 가중 평균수익률 계산
     for ticker in summary:
         s = summary[ticker]
-        if s["trades"] > 0:
-            s["pnl_ratio"] /= s["trades"]
+        if s["invested"] > 0:
+            s["pnl_ratio"] = s["pnl"] / s["invested"]
+        else:
+            s["pnl_ratio"] = 0.0
 
     return summary
 
@@ -311,6 +344,7 @@ async def render_status(market: KISMarket, is_paper: bool) -> None:
         "진입가",
         "청산가",
         "수익금",
+        "수수료",
         "수익률",
         "보유시간",
     ]
@@ -324,28 +358,29 @@ async def render_status(market: KISMarket, is_paper: bool) -> None:
         "right",
         "right",
         "right",
+        "right",
     ]
-    trade_min_widths = [19, 19, 14, 6, 10, 10, 10, 8, 10]
+    trade_min_widths = [16, 16, 14, 6, 10, 10, 10, 10, 8, 10]
 
     if not recent_trades:
-        trade_rows = [["", "", "거래 내역 없음", "", "", "", "", "", ""]]
+        trade_rows = [["", "", "거래 내역 없음", "", "", "", "", "", "", ""]]
     else:
         trade_rows = []
         for t in recent_trades:
             # ISO timestamp에서 년월일 시간 추출
             ts_exit_raw = t.get("timestamp", "")
-            ts_exit = ts_exit_raw.replace("T", " ")[:19] if ts_exit_raw else ""
+            ts_exit = ts_exit_raw.replace("T", " ")[:16] if ts_exit_raw else ""
 
             ts_entry_raw = t.get("entry_time", "")
-            ts_entry = ts_entry_raw.replace("T", " ")[:19] if ts_entry_raw else ""
+            ts_entry = ts_entry_raw.replace("T", " ")[:16] if ts_entry_raw else ""
 
             ticker = t.get("ticker", "")
             name = market.get_stock_name(ticker)
             qty = t.get("qty", 0)
             entry = t.get("entry_price", 0)
             exit = t.get("exit_price", 0)
-            pnl = t.get("pnl", 0)
-            pnl_ratio = t.get("pnl_ratio", 0.0) * 100
+            commission, pnl, pnl_ratio_val = _calculate_fallback_commission(t, market)
+            pnl_ratio = pnl_ratio_val * 100
 
             # 보유 시간 계산
             holding_time = "-"
@@ -375,6 +410,7 @@ async def render_status(market: KISMarket, is_paper: bool) -> None:
                     f"{entry:,}",
                     f"{exit:,}",
                     f"{int(pnl):+,}",
+                    f"{int(commission):,}",
                     f"{pnl_ratio:+.2f}%",
                     holding_time,
                 ]
@@ -385,13 +421,13 @@ async def render_status(market: KISMarket, is_paper: bool) -> None:
     )
 
     # -- 오늘 거래 요약 (집계) --
-    daily_summary = get_daily_summary()
-    summary_headers = ["종목", "거래", "승/패", "수익금", "평균익률"]
-    summary_aligns = ["left", "right", "center", "right", "right"]
-    summary_min_widths = [14, 6, 8, 12, 10]
+    daily_summary = get_daily_summary(market)
+    summary_headers = ["종목", "거래", "승/패", "수익금", "수수료", "평균익률"]
+    summary_aligns = ["left", "right", "center", "right", "right", "right"]
+    summary_min_widths = [14, 6, 8, 12, 10, 10]
 
     if not daily_summary:
-        summary_rows = [["", "오늘 거래 없음", "", "", ""]]
+        summary_rows = [["", "오늘 거래 없음", "", "", "", ""]]
     else:
         summary_rows = []
         # 수익금 기준 내림차순 정렬
@@ -407,6 +443,7 @@ async def render_status(market: KISMarket, is_paper: bool) -> None:
                     f"{s['trades']}회",
                     f"{s['wins']}/{s['losses']}",
                     f"{int(s['pnl']):+,}",
+                    f"{int(s['commission']):,}",
                     f"{s['pnl_ratio']*100:+.2f}%",
                 ]
             )

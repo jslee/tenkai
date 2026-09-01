@@ -26,7 +26,9 @@ def test_build_time_series_in_charts():
                 "close": 50500.0,
                 "volume": 10000.0,
                 "bb_upper": 51200.5,
+                "bb_inner_upper": 50600.0,
                 "bb_mid": 50000.0,
+                "bb_inner_lower": 49400.0,
                 "bb_lower": 48799.5,
                 "ema_short": 50100.1,
                 "ema_long": 49800.2,
@@ -41,13 +43,13 @@ def test_build_time_series_in_charts():
 
     snapshot = {"interval_snapshots": {3: {"chart_frame": df_3m}}}
 
-    result = arbiter.build_time_series_instead_charts(snapshot)
+    result = arbiter.build_time_series_of_charts(snapshot)
 
     # Verify section title
     assert "### 3분봉 차트 시계열 데이터" in result
     # Verify headers
     assert (
-        "시간 | 시가 | 고가 | 저가 | 종가 | 거래량 | BB상한 | BB기준 | BB하한" in result
+        "시간 | 시가 | 고가 | 저가 | 종가 | 거래량 | BB상한(2.0) | BB상한(1.0) | BB기준 | BB하한(1.0) | BB하한(2.0)" in result
     )
     # Verify formatted row values
     assert "06-20 09:30" in result
@@ -57,7 +59,9 @@ def test_build_time_series_in_charts():
     assert "50,500" in result
     assert "10,000" in result
     assert "51,200.50" in result
+    assert "50,600.00" in result
     assert "50,000.00" in result
+    assert "49,400.00" in result
     assert "48,799.50" in result
     assert "50,100.10" in result
     assert "49,800.20" in result

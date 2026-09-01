@@ -135,15 +135,19 @@ async def _ask_analysis(
         content.append({"type": "text", "text": f"다음은 {label} 차트입니다."})
         content.append({"type": "image_url", "image_url": {"url": _encode_image(path)}})
 
-    payload = {
+    payload: dict[str, Any] = {
         "model": config.ARBITER_MODEL,
-        "max_tokens": max(config.ARBITER_MAX_TOKENS, 2048),
         "temperature": config.ARBITER_TEMPERATURE,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": content},
         ],
     }
+    if config.ARBITER_MAX_TOKENS > 0:
+        payload["max_tokens"] = config.ARBITER_MAX_TOKENS
+    elif getattr(config, "ARBITER_MAX_TOKENS", -1) == -1:
+        # If set to -1, default to 4096 or omit to avoid negative value 400 Bad Request
+        payload["max_tokens"] = 4096
 
     headers = {}
     api_key = getattr(config, "OPENAI_API_KEY", None)
@@ -158,6 +162,14 @@ async def _ask_analysis(
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, json=payload, headers=headers) as resp:
+                if resp.status >= 400:
+                    err_text = await resp.text()
+                    logger.error(
+                        "[%s] AI 서버 에러 응답 (HTTP %d): %s",
+                        ticker,
+                        resp.status,
+                        err_text,
+                    )
                 resp.raise_for_status()
                 data = await resp.json()
     except Exception as exc:
@@ -306,10 +318,11 @@ async def _run(args: argparse.Namespace) -> None:
         name = market.get_stock_name(ticker) or ticker
     print(f"\n{ticker} {name} — 차트 생성 중...")
 
-    chart_paths = await _build_period_charts(market, ticker, name, output_dir)
-    if chart_paths is None:
+    chart_res = await _build_period_charts(market, ticker, name, output_dir)
+    if chart_res is None:
         print(f"오류: {ticker} 차트 생성 실패", file=sys.stderr)
         sys.exit(1)
+    chart_paths, indicators_summary = chart_res
 
     print("  → AI 심층 분석 요청 중...")
     result = await _ask_analysis(ticker, name, chart_paths)

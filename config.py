@@ -236,7 +236,8 @@ OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", None)
 #   - Gemma 4는 이미지 토큰을 1120개로 묶어둔 반면, Qwen 3.6 시리즈는 모델에 따라 최소 26만 토큰에서 최신 Plus/Flash 모델의 경우 최대 100만(1M) 토큰 콘텍스트를 지원합니다.이미지 하나가 정밀하게 쪼개져 4,000~8,000개의 비전 토큰을 소모하더라도, Qwen에게는 전체 콘텍스트 허용량의 1%도 되지 않는 사소한 크기입니다. 구글처럼 서버 비용 때문에 이미지 토큰을 억지로 숨통을 틀어막을 필요가 없는 구조입니다.자동 최적화 (vLLM 및 LM Studio)Qwen 3.6 비전 모델을 API나 LM Studio로 호출할 때는 개발자가 헤드 가이드를 위해 무언가를 지정할 필요가 없습니다. 모델과 엔진(qwen_vl_utils)이 이미지 해상도를 판단하여 글자가 읽히는 최적의 토큰 수로 자동 분할(Dynamic Resolution)해 연산합니다.
 
 # ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "qwen/qwen3.6-27b")
-ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "qwen/qwen3.6-35b-a3b")
+# ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "qwen/qwen3.6-35b-a3b")
+ARBITER_MODEL: str = os.environ.get("ARBITER_MODEL", "qwen/qwen3.8-27b")
 
 # 고해상도 차트 이미지의 정확한 해석은 qwen이 월등히 나은 것으로 판단함
 # ⭐ LM Studio 설정 창을 건드리지 않고, 호출할 때만 고해상도를 켜는 핵심 옵션

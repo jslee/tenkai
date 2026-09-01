@@ -416,15 +416,18 @@ async def _ask_to_picker(
             }
         )
 
-    payload = {
+    payload: dict[str, Any] = {
         "model": config.ARBITER_MODEL,
-        "max_tokens": config.ARBITER_MAX_TOKENS,
         "temperature": config.ARBITER_TEMPERATURE,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": content},
         ],
     }
+    if config.ARBITER_MAX_TOKENS > 0:
+        payload["max_tokens"] = config.ARBITER_MAX_TOKENS
+    elif getattr(config, "ARBITER_MAX_TOKENS", -1) == -1:
+        payload["max_tokens"] = 4096
 
     headers = {}
     api_key = getattr(config, "OPENAI_API_KEY", None)
@@ -439,6 +442,14 @@ async def _ask_to_picker(
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, json=payload, headers=headers) as resp:
+                if resp.status >= 400:
+                    err_body = await resp.text()
+                    logger.error(
+                        "[%s] AI 서버 에러 응답 (HTTP %d): %s",
+                        ticker,
+                        resp.status,
+                        err_body,
+                    )
                 resp.raise_for_status()
                 data = await resp.json()
     except Exception as exc:

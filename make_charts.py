@@ -291,6 +291,8 @@ def _build_indicator_frame(candles_asc: list[dict]) -> pd.DataFrame:
     df["bb_std"] = rolling_close.std(ddof=0)
     df["bb_upper"] = df["bb_mid"] + (df["bb_std"] * 2.0)
     df["bb_lower"] = df["bb_mid"] - (df["bb_std"] * 2.0)
+    df["bb_inner_upper"] = df["bb_mid"] + (df["bb_std"] * 1.0)
+    df["bb_inner_lower"] = df["bb_mid"] - (df["bb_std"] * 1.0)
 
     df["rsi"] = _build_rsi_series(closes, config.RSI_PERIOD)
 

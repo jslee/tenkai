@@ -203,9 +203,11 @@ class Arbiter:
             "low": "저가",
             "close": "종가",
             "volume": "거래량",
-            "bb_upper": "BB상한",
+            "bb_upper": "BB상한(2.0)",
+            "bb_inner_upper": "BB상한(1.0)",
             "bb_mid": "BB기준",
-            "bb_lower": "BB하한",
+            "bb_inner_lower": "BB하한(1.0)",
+            "bb_lower": "BB하한(2.0)",
             "ema_short": f"EMA({config.EMA_SHORT})",
             "ema_long": f"EMA({config.EMA_LONG})",
             "ema_trend": f"EMA({config.EMA_TREND})",
@@ -273,7 +275,9 @@ class Arbiter:
             # 지표들
             for col in [
                 "bb_upper",
+                "bb_inner_upper",
                 "bb_mid",
+                "bb_inner_lower",
                 "bb_lower",
                 "ema_short",
                 "ema_long",
@@ -436,25 +440,39 @@ class Arbiter:
                     }
                 )
 
-        payload = {
+        payload: dict[str, Any] = {
             "model": config.ARBITER_MODEL,
-            "max_tokens": config.ARBITER_MAX_TOKENS,
             "temperature": config.ARBITER_TEMPERATURE,
             "messages": [
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": content},
             ],
         }
+        if config.ARBITER_MAX_TOKENS > 0:
+            payload["max_tokens"] = config.ARBITER_MAX_TOKENS
+        elif getattr(config, "ARBITER_MAX_TOKENS", -1) == -1:
+            payload["max_tokens"] = 4096
 
         headers = {}
         api_key = getattr(config, "OPENAI_API_KEY", None)
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
+        url = config.ARBITER_BASE_URL or "http://127.0.0.1:1234/v1/chat/completions"
+        if not url.endswith("/chat/completions"):
+            url = url.rstrip("/") + "/chat/completions"
+
         timeout = aiohttp.ClientTimeout(total=config.ARBITER_TIMEOUT_SEC)
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(config.ARBITER_BASE_URL, json=payload) as resp:
+                async with session.post(url, json=payload, headers=headers) as resp:
+                    if resp.status >= 400:
+                        err_body = await resp.text()
+                        logger.error(
+                            "[arbiter] AI 서버 에러 응답 (HTTP %d): %s",
+                            resp.status,
+                            err_body,
+                        )
                     resp.raise_for_status()
                     data = await resp.json()
         except aiohttp.ClientError as exc:

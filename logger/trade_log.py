@@ -121,6 +121,16 @@ def write_close_log(
     _ensure_log_dir()
 
     pnl_ratio = pnl / (entry_price * qty) if qty > 0 and entry_price > 0 else 0.0
+
+    # 수수료 및 거래세 계산
+    buy_commission = entry_price * qty * config.BROKER_FEE_RATE
+    sell_commission = exit_price * qty * config.BROKER_FEE_RATE
+    transaction_tax = exit_price * qty * config.TRANSACTION_TAX_RATE
+    total_commission = buy_commission + sell_commission + transaction_tax
+
+    net_pnl = pnl - total_commission
+    net_pnl_ratio = net_pnl / (entry_price * qty) if qty > 0 and entry_price > 0 else 0.0
+
     record: dict[str, Any] = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "event": "CLOSE",
@@ -131,6 +141,9 @@ def write_close_log(
         "qty": qty,
         "pnl": round(pnl, 0),
         "pnl_ratio": round(pnl_ratio, 6),
+        "commission": round(total_commission, 0),
+        "net_pnl": round(net_pnl, 0),
+        "net_pnl_ratio": round(net_pnl_ratio, 6),
         "close_reason": close_reason,
     }
     try:

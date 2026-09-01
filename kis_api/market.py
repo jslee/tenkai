@@ -174,6 +174,14 @@ class KISMarket:
                     params=params,
                     timeout=aiohttp.ClientTimeout(total=10),
                 ) as resp:
+                    if resp.status >= 400:
+                        try:
+                            body = await resp.text()
+                            logger.error(
+                                "[현재가 조회] KIS API 에러 응답 (HTTP %d): %s", resp.status, body
+                            )
+                        except Exception:
+                            pass
                     resp.raise_for_status()
                     data = await resp.json()
 
@@ -577,11 +585,19 @@ class KISMarket:
                 params=params,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
-                if resp.status >= 500:
-                    logger.warning(
-                        "[일별분봉 조회] KIS 서버 에러(HTTP %d), 조회 중단", resp.status
-                    )
-                    return None
+                if resp.status >= 400:
+                    try:
+                        body = await resp.text()
+                        logger.warning(
+                            "[일별분봉 조회] KIS API 에러 응답 (HTTP %d): %s", resp.status, body
+                        )
+                    except Exception:
+                        pass
+                    if resp.status >= 500:
+                        logger.warning(
+                            "[일별분봉 조회] KIS 서버 에러(HTTP %d), 조회 중단", resp.status
+                        )
+                        return None
                 resp.raise_for_status()
                 data = await resp.json()
         except aiohttp.ClientResponseError:
