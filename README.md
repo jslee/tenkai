@@ -7,7 +7,7 @@ Local AI와 한국투자증권 KIS API를 연결하는 단일 종목 단기 자�
 ## 요구사항
 
 - Python 3.11+
-- [LM Studio](https://lmstudio.ai/) 또는 OpenAI 호환 LLM 서버 (기본 `http://127.0.0.1:1234/v1/chat/completions`)
+- [LM Studio](https://lmstudio.ai/) — 로컬 LLM 서버 (기본 `http://127.0.0.1:1234`)
 - 한국투자증권 OpenAPI 앱 키 (실투자 / 모의투자)
 
 ```bash
@@ -28,7 +28,7 @@ KIS_PAPER_ACCOUNT_NO=...
 KIS_IS_PAPER=true          # false 로 변경하면 실투자 모드
 
 ARBITER_BASE_URL=http://127.0.0.1:1234/v1/chat/completions
-ARBITER_MODEL=qwen/qwen3.8-27b
+ARBITER_MODEL=google/gemma-4-26b-a4b
 ```
 
 ---
@@ -39,15 +39,14 @@ ARBITER_MODEL=qwen/qwen3.8-27b
 - analysis로 선정된 종목에 언제 들어갈지 파악한다.
 - analysis는 이미 보유중인 종목에 대한 대응 전략도 제공한다.
 - 종목 매수가 결정되면 main.py으로 자동매매한다.
-- 자동매매 중 계좌 모니터링은 status를 이용한다.
+- 자동매매 중 게좌 모니터링은 status를 이용한다.
 
 | 파일 | 용도 |
 |---|---|
 | `main.py` | 자동매매 메인 루프 |
-| `picker.py` | 관심 종목 스크리닝 (다수 종목 → 점수 순 출력 및 리포트 저장) |
+| `picker.py` | 관심 종목 스크리닝 (다수 종목 → 점수 순 출력) |
 | `analysis.py` | 단일 종목 심층 분석 보고서 |
 | `status.py` | 계좌 현황 실시간 모니터 |
-| `sim_logs.py` | 과거 로그 기반 AI 판정 시뮬레이션 |
 
 ---
 
@@ -66,7 +65,9 @@ python main.py --name 삼성전자
 
 # 실투자 모드
 python main.py --ticker 005930 --real
-python main.py --name 삼성전자 --real
+
+# 1회만 실행
+python main.py --ticker 005930 --once
 ```
 
 ### 파라미터
@@ -76,6 +77,8 @@ python main.py --name 삼성전자 --real
 | `--ticker` | config.TICKER | 종목 코드 |
 | `--name` | — | 종목명으로 지정 (`--ticker` 대신 사용) |
 | `--real` | False | 실투자 모드 (미지정 시 모의투자) |
+| `--once` | False | 1회 실행 후 종료 |
+| `--plot-count` | 120 | AI에 전달할 차트 봉 수 |
 | `--output-dir` | charts | 차트 저장 디렉터리 |
 | `--debug` | False | DEBUG 로그 출력 |
 
@@ -106,20 +109,19 @@ LM Studio arbiter 호출
 
 | 항목 | 기본값 | 설명 |
 |---|---|---|
-| 손절 | 5% (고정) 또는 ATR × 5.0 | `USE_ATR_STOP=true` 설정 시 ATR 기반 동적 손절(최소 0.8% 이상), `false` 시 고정 5% |
-| 익절 | 8% (고정) 또는 ATR × 5.0 | `USE_ATR_STOP=true` 설정 시 ATR 기반 동적 익절(최소 1.5% 이상), `false` 시 고정 8% |
+| 손절 | 5% (고정 비율) | `USE_ATR_STOP`이 false이므로 고정 비율 적용 (True 설정시 ATR × 3.0, 최소 0.8% 이상) |
+| 익절 | 8% (고정 비율) | `USE_ATR_STOP`이 false이므로 고정 비율 적용 (True 설정시 ATR × 3.0, 최소 1.5% 이상) |
 | 트레일링 스탑 | 1.5% | 고점 대비 |
 | 일일 최대 손실 | 5% | 초과 시 당일 거래 중단 |
 | 일일 최대 거래 횟수 | 20회 | |
 | 손절 후 재진입 쿨다운 | 20분 | |
 | 1회 매수 비율 | 30% | 총 자산 대비 |
-| 총 최대 보유 비율 | 90% | 총 자산 대비 |
 
 ---
 
 ## picker.py — 종목 스크리닝
 
-`watchlist_stocks.csv`에 등록된 종목들을 일봉/주봉/월봉 차트 및 재무 비율로 분석하고, AI가 매수 매력도 점수(0~100)를 부여한다. 점수 높은 순으로 콘솔에 출력하고 `reports/report_YYYYMMDD.md` 파일로 저장한다.
+`watchlist_stocks.csv`에 등록된 종목들을 일봉/주봉/월봉 차트로 분석하고, AI가 매수 매력도 점수(0~100)를 부여한다. 점수 높은 순으로 출력한다.
 
 ### 실행
 
@@ -136,9 +138,6 @@ python picker.py --name 삼성전자
 
 # CSV 파일 지정
 python picker.py --csv my_watchlist.csv
-
-# 추가 가이드라인 지정
-python picker.py --guideline "반도체 소부장 중심 평가"
 ```
 
 ### 파라미터
@@ -146,10 +145,10 @@ python picker.py --guideline "반도체 소부장 중심 평가"
 | 파라미터 | 기본값 | 설명 |
 |---|---|---|
 | `--csv` | watchlist_stocks.csv | 종목 목록 파일 |
-| `--ticker` | — | 특정 종목 코드 (쉼표로 복수 지정 가능) |
+| `--ticker` | — | 특정 종목 코드 (쉼표로 복수 지정) |
 | `--name` | — | 종목명으로 단일 종목 지정 |
-| `--guideline` | `""` | AI 분석 시 적용할 추가 가이드라인 지침 |
 | `--output-dir` | charts/periods | 차트 저장 디렉터리 |
+| `--count` | 120 | 차트 봉 수 |
 | `--debug` | False | DEBUG 로그 출력 |
 
 ### watchlist_stocks.csv 포맷
@@ -193,8 +192,8 @@ python analysis.py --ticker 005930
 # 종목명으로
 python analysis.py --name 삼성전자
 
-# 저장 디렉터리 지정
-python analysis.py --name SK하이닉스 --output-dir charts/periods
+# 봉 수·저장 디렉터리 지정
+python analysis.py --ticker 005930 --count 200 --output-dir charts/analysis
 ```
 
 ### 파라미터
@@ -202,8 +201,9 @@ python analysis.py --name SK하이닉스 --output-dir charts/periods
 | 파라미터 | 기본값 | 설명 |
 |---|---|---|
 | `--ticker` | — | 종목 코드 (`--name`과 택일, 필수) |
-| `--name` | — | 종목명 키워드 (`--ticker`와 택일, 필수) |
-| `--output-dir` | charts/periods | 차트 저장 디렉터리 |
+| `--name` | — | 종목명 (`--ticker`와 택일, 필수) |
+| `--output-dir` | charts/analysis | 차트 저장 디렉터리 |
+| `--count` | 120 | 차트 봉 수 |
 | `--debug` | False | DEBUG 로그 출력 |
 
 ### 분석 항목
@@ -214,7 +214,7 @@ AI가 아래 항목을 분석하고 JSON으로 반환한다.
 - **기술적 지표** — RSI 다이버전스, MACD 크로스, 볼린저밴드 수축/확장, EMA 배열
 - **거래량 분석** — 상승/하락 시 거래량 신뢰도, 급증/급감 감지
 - **매매 전략** — 현재 구간 진단, 진입 조건, 손절 기준, 목표가 1·2차
-- **최신 뉴스** — 공시/실적/테마 이슈와 차트 상관관계
+- **최신 뉴스** — 웹 검색을 통한 공시/실적/테마 이슈와 차트 상관관계
 - **종합 점수** — 매수 매력도 0~100점, 투자 포인트, 리스크 요인
 
 ### 출력 예시
@@ -283,33 +283,31 @@ python status.py --paper --interval 30
 ```env
 # 종목
 TICKER=005930
-MARKET=KOSPI
 
 # 장 시간
-MARKET_OPEN_TIME=09:30
-MARKET_CLOSE_TIME=15:00
-HOLD_OVERNIGHT=true           # true: 오버나이트 허용 (장 마감 시 미청산)
-FORCE_CLOSE_ON_EXIT=false     # 프로그램 종료 시 포지션 강제 청산 여부
+MARKET_OPEN_TIME=09:10
+MARKET_CLOSE_TIME=15:10
+HOLD_OVERNIGHT=false          # true: 오버나이트 허용
+FORCE_CLOSE_ON_EXIT=true      # 프로그램 종료 시 포지션 강제 청산
 
 # 리스크
-USE_ATR_STOP=true             # true: ATR 기반 동적 손익절, false: 고정 비율(손절 5%, 익절 8%)
-ATR_SL_MULTIPLIER=5.0
-ATR_TP_MULTIPLIER=5.0
+USE_ATR_STOP=false            # 고정 비율 손익절 사용
+ATR_SL_MULTIPLIER=3.0
+ATR_TP_MULTIPLIER=3.0
 MIN_SL_RATIO=0.008
 MIN_TP_RATIO=0.015
 TRAILING_STOP_RATIO=0.015
 MAX_DAILY_LOSS_RATIO=0.05
 MAX_TRADES_PER_DAY=20
 STOP_LOSS_COOLDOWN_MINUTES=20
-SINGLE_TRADE_RATIO=0.3
 MAX_POSITION_RATIO=0.9
 
-# Arbiter (LM Studio / OpenAI 호환 API)
+# LM Studio
 ARBITER_BASE_URL=http://127.0.0.1:1234/v1/chat/completions
-ARBITER_MODEL=qwen/qwen3.8-27b
-ARBITER_MAX_TOKENS=4096
+ARBITER_MODEL=google/gemma-4-26b-a4b
+ARBITER_MAX_TOKENS=512
 ARBITER_TEMPERATURE=0.1
-ARBITER_TIMEOUT_SEC=120
+ARBITER_TIMEOUT_SEC=60
 ```
 
 ---
@@ -319,34 +317,29 @@ ARBITER_TIMEOUT_SEC=120
 ```
 tenkai/
 ├── main.py               # 자동매매 메인 루프
-├── picker.py             # 관심 종목 스크리닝 (다수 종목 평가 및 리포트)
-├── analysis.py           # 단일 종목 심층 분석 보고서
+├── picker.py             # 종목 스크리닝
+├── analysis.py           # 단일 종목 심층 분석
 ├── status.py             # 계좌 모니터
-├── sim_logs.py           # 과거 거래 로그 기반 AI 판정 시뮬레이션
 ├── make_charts.py        # 차트 PNG 생성 유틸
-├── config.py             # 전략 및 환경 파라미터
+├── config.py             # 전략 파라미터
 ├── chart_config.yaml     # 차트 표시 설정
-├── prompt.yaml           # arbiter 시스템/분석 프롬프트
 ├── watchlist_stocks.csv  # 스크리닝 대상 종목 목록
 ├── requirements.txt
 ├── kis_api/
-│   ├── auth.py           # KIS 인증 / 토큰 캐시 (실전/모의)
-│   ├── market.py         # 시세 / 분봉 / 호가 / 잔고 / 재무비율
+│   ├── auth.py           # KIS 인증 / 토큰 캐시
+│   ├── market.py         # 시세 / 분봉 / 호가 / 잔고
 │   ├── market_websocket.py
 │   └── order.py          # 시장가 주문
 ├── filters/
 │   └── gate_market.py    # 시장 환경 필터
 ├── strategy/
 │   ├── arbiter.py        # LM Studio 호출 / 응답 파싱
-│   ├── indicators.py     # 기술 지표 계산 (RSI, BB, MACD, EMA 등)
-│   └── risk.py           # 포지션 / 리스크 관리 (SL, TP, 트레일링 등)
+│   ├── indicators.py     # 기술 지표 계산
+│   └── risk.py           # 포지션 / 리스크 관리
 ├── logger/
-│   └── trade_log.py      # JSONL 거래 로그 기록
-├── logs/
-│   └── trades_<ticker>.jsonl
-├── reports/
-│   └── report_<YYYYMMDD>.md
-└── naver-search-mcp/     # Naver Search MCP 서버
+│   └── trade_log.py      # JSONL 거래 로그
+└── logs/
+    └── trades_<ticker>.jsonl
 ```
 
 ---
