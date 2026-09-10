@@ -4,6 +4,7 @@ config.py — 환경 변수 및 전략 파라미터
 """
 
 import os
+
 from dotenv import load_dotenv
 
 # .env 파일 로드 (환경 변수에 적용)

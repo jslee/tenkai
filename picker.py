@@ -24,16 +24,15 @@ from typing import Any
 
 import aiohttp
 import numpy as np
+from colorama import Fore, Style
+from colorama import init as _colorama_init
 
 import config
 from kis_api import KISAuth, KISMarket
 from make_charts import (
     _build_period_indicator_frame,
     _render_period_chart,
-    chart_config,
 )
-
-from colorama import Fore, Style, init as _colorama_init
 
 _colorama_init(autoreset=True)
 
@@ -68,6 +67,7 @@ PICKER_PROMPT_TEMPLATE = """당신은 한국 주식 단기 스윙 트레이딩�
 [평가 원칙]
 - 내일 당장 진입할 만한 종목인지 평가해 점수를 매긴다. 
 - 차트에 포함된 지표와 기본 지표, 뉴스, 커뮤니티 정보를 종합하여 매수 매력도를 채점한다.
+- PBR이 1.0 이하일 때 점수를 부여하되 낮으면 낮을 수록 높은 점수를 부여한다.
 - 일봉 → 주봉 → 월봉 순으로 비중을 두어 추세를 확인한다
 - 추세 속의 '눌림목(Pullback)'인지 아니면 추세가 꺾이는 '추세 전환(Reversal)'인지를 명확히 판별한다.
 - 매수 타이밍(즉시/눌림목 대기/돌파 대기/관망)을 한 가지로 명시한다.
@@ -213,8 +213,8 @@ def _extract_json(text: str) -> dict:
 
         if recovered:
             return recovered
-    except Exception:
-        pass
+    except (ValueError, TypeError, IndexError, re.error) as exc:
+        logger.debug("정규식 JSON 복구 실패: %s", exc)
 
     raise ValueError("JSON 파싱 및 복구 실패")
 
@@ -259,8 +259,6 @@ async def _build_period_charts(
     output_dir: Path,
 ) -> tuple[dict[str, Path], dict[str, dict[str, float]]] | None:
     """일봉/주봉/월봉 차트 PNG를 생성하고 {D/W/M: path} 와 기본 지표 요약을 반환한다."""
-    import pandas as pd
-
     # (주기코드, 라벨, API조회할데이터개수, 차트에그릴데이터개수)
     period_configs = [
         ("D", "일봉", 200, 60),
@@ -279,7 +277,14 @@ async def _build_period_charts(
                 candles = await market.get_weekly_candles(ticker, weeks=fetch_count)
             else:
                 candles = await market.get_monthly_candles(ticker, months=fetch_count)
-        except Exception as exc:
+        except (
+            aiohttp.ClientError,
+            asyncio.TimeoutError,
+            KeyError,
+            ValueError,
+            TypeError,
+            OSError,
+        ) as exc:
             logger.warning("[%s] %s 캔들 조회 실패: %s", ticker, period_label, exc)
             return None
 
@@ -440,19 +445,21 @@ async def _ask_to_picker(
 
     timeout = aiohttp.ClientTimeout(total=config.ARBITER_TIMEOUT_SEC)
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(url, json=payload, headers=headers) as resp:
-                if resp.status >= 400:
-                    err_body = await resp.text()
-                    logger.error(
-                        "[%s] AI 서버 에러 응답 (HTTP %d): %s",
-                        ticker,
-                        resp.status,
-                        err_body,
-                    )
-                resp.raise_for_status()
-                data = await resp.json()
-    except Exception as exc:
+        async with (
+            aiohttp.ClientSession(timeout=timeout) as session,
+            session.post(url, json=payload, headers=headers) as resp,
+        ):
+            if resp.status >= 400:
+                err_body = await resp.text()
+                logger.error(
+                    "[%s] AI 서버 에러 응답 (HTTP %d): %s",
+                    ticker,
+                    resp.status,
+                    err_body,
+                )
+            resp.raise_for_status()
+            data = await resp.json()
+    except (aiohttp.ClientError, asyncio.TimeoutError, json.JSONDecodeError) as exc:
         err_msg = str(exc) or type(exc).__name__
         logger.error("[%s] AI 호출 실패: %s (%s)", ticker, err_msg, type(exc).__name__)
         return {
@@ -496,7 +503,7 @@ async def _ask_to_picker(
         parsed.setdefault("score-reason", "")
         parsed.setdefault("timing-reason", "")
         return parsed
-    except Exception as exc:
+    except (ValueError, KeyError, TypeError, IndexError, AttributeError) as exc:
         logger.error("[%s] 응답 파싱 실패: %s | raw=%s", ticker, exc, data)
         return {
             "score": 0,
@@ -536,7 +543,7 @@ def _save_report(results: list[dict[str, Any]]) -> None:
     """분석 결과를 마크다운 리포트 파일로 저장한다."""
     from datetime import datetime
 
-    today_str = datetime.now().strftime("%Y%m%d")
+    today_str = datetime.now().strftime("%Y%m%d")  # noqa: DTZ005
 
     report_dir = Path("reports")
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -546,7 +553,7 @@ def _save_report(results: list[dict[str, Any]]) -> None:
 
     lines = []
     lines.append(
-        f"# 주식 스크리닝 리포트 ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})\n"
+        f"# 주식 스크리닝 리포트 ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})\n"  # noqa: DTZ005
     )
 
     for rank, r in enumerate(ranked, 1):
@@ -566,7 +573,7 @@ def _save_report(results: list[dict[str, Any]]) -> None:
         print(
             f"\n{Fore.CYAN}리포트가 성공적으로 저장되었습니다: {filepath}{Style.RESET_ALL}"
         )
-    except Exception as exc:
+    except OSError as exc:
         logger.error("리포트 파일 저장 실패: %s", exc)
 
 
@@ -627,14 +634,21 @@ async def _run(args: argparse.Namespace) -> None:
             continue
         chart_paths, indicators_summary = result
 
-        print(f"  → 재무 비율 조회...")
+        print("  → 재무 비율 조회...")
         try:
             financial_ratios = await market.get_financial_ratio(ticker)
-        except Exception as exc:
+        except (
+            aiohttp.ClientError,
+            asyncio.TimeoutError,
+            KeyError,
+            ValueError,
+            TypeError,
+            OSError,
+        ) as exc:
             logger.warning("[%s] 재무비율 조회 실패: %s", ticker, exc)
             financial_ratios = []
 
-        print(f"  → 분석 요청...")
+        print("  → 분석 요청...")
         decision = await _ask_to_picker(
             ticker,
             name,
